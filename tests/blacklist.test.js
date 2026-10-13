@@ -1,0 +1,57 @@
+const assert = require("node:assert/strict"), fs = require("node:fs"), vm = require("node:vm");
+const context = { crypto, URL, structuredClone, location: { hostname: "vybor.example", href: "https://vybor.example/product" } };
+context.document = {
+  querySelectorAll(selector) {
+    return selector.includes("application/ld+json") ? [{ textContent: JSON.stringify({ "@type": "Product", sku: "Код товара: 40030", name: "Крепление GTV", offers: { price: "24.55" } }) }] : [];
+  }, querySelector() { return null; }
+};
+let stored = { ysc_profiles: [{ id: "old", domain: "vybor.example", supplier: "VYBOR", enabled: true, fields: { article: { enabled: true, source: "auto" } } }] };
+context.chrome = { storage: { local: { get: async () => structuredClone(stored), set: async value => { stored = { ...stored, ...structuredClone(value) }; } } } };
+vm.createContext(context);
+for (const file of ["core/formatter.js", "core/parser.js", "storage/profiles.js"]) vm.runInContext(fs.readFileSync(file, "utf8"), context);
+const parser = context.YSCParser;
+assert.equal(parser.parse().article, "Код товара: 40030");
+assert.equal(parser.parse({ blacklist: ["Код товара:"] }).article, "40030");
+assert.equal(parser.removeBlocked("A [.*] B", ["[.*]"]), "A B");
+assert.equal(parser.removeBlocked("Код товара: Код товара: 40030", ["Код товара:"]), "40030");
+assert.equal(parser.removeBlocked("40030", ["", " "]), "40030");
+assert.equal(parser.removeBlocked("40030", ["40030"]), "");
+assert.equal(parser.removeBlocked("Код товара: 40030", []), "Код товара: 40030");
+(async () => {
+  const profiles = context.YSCProfiles;
+  const profile = await profiles.get();
+  await profiles.saveBlacklist(profile, ["Код товара:"]);
+  const reopened = await profiles.get();
+  assert.equal(parser.parse(reopened).article, "40030");
+  assert.equal(reopened.supplier, "VYBOR");
+  assert.equal(reopened.fields.article.source, "auto");
+  await profiles.saveBlacklist(reopened, []);
+  assert.equal(parser.parse(await profiles.get()).article, "Код товара: 40030");
+  console.log("Literal blacklist, persistence and removal tests passed");
+  await profiles.save({ ...profiles.base("other.example"), id: "other-a", enabled: true });
+  await profiles.save({ ...profiles.base("other.example"), id: "other-b", enabled: false });
+  stored.ysc_excel_columns = ["url"];
+  assert.equal(await profiles.removeDomain("other.example"), 2);
+  assert.equal((await profiles.all()).length, 1);
+  assert.equal((await profiles.get()).domain, "vybor.example");
+  assert.deepEqual(stored.ysc_excel_columns, ["url"]);
+  await assert.rejects(() => profiles.removeDomain(""), /Не вибрано/);
+  console.log("Domain deletion removes all selected-domain profiles only; other domains and Excel settings preserved");
+  const remembered = await profiles.get();
+  remembered.fields.article.selector = ".unsaved";
+  const lastUrl = "https://vybor.example/last?size=2,8#details";
+  await profiles.remember(remembered, lastUrl);
+  let latest = await profiles.get();
+  assert.equal(latest.lastUrl, lastUrl);
+  assert.notEqual(latest.fields.article.selector, ".unsaved", "Remembering a URL does not save pending rule edits");
+  for (const bad of ["javascript:alert(1)", "file:///C:/secret", "https://evil.example/", "https://u:p@vybor.example/"]) assert.equal(profiles.pageUrl(bad, "vybor.example"), "");
+  await profiles.remember(latest, "https://evil.example/");
+  assert.equal((await profiles.get()).lastUrl, lastUrl);
+  const alternate = { ...profiles.base("vybor.example"), id: "alternate", enabled: false, lastUrl };
+  await profiles.save(alternate); await profiles.select("alternate");
+  assert.equal((await profiles.get()).id, "alternate", "Explicitly chosen profile takes precedence and is activated");
+  assert.equal((await profiles.get()).enabled, true);
+  assert.equal(profiles.validate(await profiles.all()).find(p => p.id === "old").lastUrl, lastUrl);
+  await assert.rejects(() => profiles.select("missing"), /не існує/);
+  console.log("Last-page memory, unsaved-rule preservation, safe URLs, chosen profile and import/export metadata passed");
+})().catch(error => { console.error(error); process.exitCode = 1; });

@@ -1,0 +1,6 @@
+{
+  "extensionDescription": {
+    "message": "Copy supplier, SKU, product name, unit and price from shop pages. Custom site profiles and clipboard formats for CAD and Excel."
+  },
+  "copyProduct": { "message": "Copy product details" }
+}

@@ -1,0 +1,10 @@
+const assert = require("node:assert/strict");
+const fs = require("node:fs"), vm = require("node:vm");
+const context = {}; vm.createContext(context);
+vm.runInContext(fs.readFileSync("core/formatter.js", "utf8"), context);
+const { format } = context.YSCFormatter;
+assert.equal(format({ supplier:"viyar", article:"83498", name:"Самоклейка, м'яка\n для ніжок" }), "VIYAR 83498 Самоклейка- м'яка для ніжок");
+assert.equal(format({ supplier:"Епіцентр", article:"MP14067345", name:"Пластина (2.2 мм)" }), "ЕПІЦЕНТР MP14067345 Пластина (2.2 мм)");
+assert.equal(format({ supplier:"A", article:"", name:"N" }), "A N");
+assert.equal(format({ supplier:"a", article:"1", name:"n" }, { supplier:false, uppercaseSupplier:false }), "1 n");
+console.log("formatter tests passed");

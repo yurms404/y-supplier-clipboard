@@ -1,0 +1,5 @@
+Generated with the built-in image generation tool (imagegen skill).
+Final editing prompt:
+Edit this clipboard icon, preserve the same centered clipboard silhouette and large exact Latin Y. Remove ALL gradients, shadows, lighting effects, noise, mottling and textures. Use ONLY two perfectly uniform flat solid color fills: vivid orange #FF7A00 for the outline, top clip and Y; light gray #D9D9D9 for the clipboard interior. Sharp clean antialiased boundaries, vector-like flat graphic, transparent background outside silhouette and in the top circular hole. No black or other background. Output square PNG 1024x1024, not a mockup. No extra text or details.
+Original generated image: y-supplier-source.png.
+PNG exports are resampled to 16, 32, 48, 128 and 1024 pixels with alpha preserved.

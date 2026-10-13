@@ -1,0 +1,96 @@
+globalThis.YSCParser = (() => {
+  const text = node => (node?.textContent || "").replace(/\s+/g, " ").trim();
+  const safeQuery = selector => { try { return selector ? document.querySelector(selector) : null; } catch (_) { return null; } };
+  function removeBlocked(value, blacklist = []) {
+    let cleaned = String(value ?? "");
+    const phrases = [...new Set(blacklist.filter(v => typeof v === "string" && v.trim()).map(v => v.trim()))].sort((a, b) => b.length - a.length);
+    for (const phrase of phrases) cleaned = cleaned.split(phrase).join("");
+    return cleaned.replace(/\s+/g, " ").trim();
+  }
+  const cleanArticle = value => String(value || "").replace(/^\s*(?:артикул|article|sku|код товару)\s*[:：]\s*/i, "").replace(/\s+/g, " ").trim();
+  function labelledArticles() {
+    // Read only rendered page text, excluding our own editor and notifications.
+    return [...document.querySelectorAll("p, li, div, span, td, dd")]
+      .filter(el => !el.closest("#ysc-panel, [data-ysc-notice]") && el.getClientRects().length)
+      .map(el => (el.innerText || "").trim())
+      .filter(value => value.length < 160 && /^(?:артикул|article|sku|код товару)\s*[:：]/i.test(value) && !/[\r\n]/.test(value))
+      .map(cleanArticle).filter(Boolean);
+  }
+  const jsonLd = () => [...document.querySelectorAll('script[type="application/ld+json"]')].flatMap(s => { try { const v = JSON.parse(s.textContent); return Array.isArray(v) ? v : [v]; } catch (_) { return []; } }).flatMap(v => v["@graph"] || [v]).filter(v => /Product/i.test(Array.isArray(v["@type"]) ? v["@type"].join(" ") : v["@type"] || ""));
+  const offers = products => products.flatMap(p => Array.isArray(p.offers) ? p.offers : p.offers ? [p.offers] : []);
+  const offerUnit = offer => offer?.priceSpecification?.referenceQuantity?.unitText || offer?.priceSpecification?.unitText || "";
+  function priceNodes() {
+    return [...document.querySelectorAll('[itemprop="price"], meta[property="product:price:amount"], [data-price], [class*="price" i]')]
+      .filter(el => !el.closest?.('#ysc-panel, [data-ysc-notice], del, s, [class*="old" i], [class*="price-old" i]'));
+  }
+  function priceText(el) { return el.getAttribute?.("content") || el.getAttribute?.("data-price") || text(el); }
+  function unitFromPrice(value) { return String(value || "").match(/(?:грн\.?|₴|UAH)\s*\/\s*([\p{L}\d²³.\-–—−]+(?:\s*м)?)/iu)?.[1] || ""; }
+  function sourceValue(rule, field, data) {
+    if (!rule || !rule.enabled) return "";
+    if (rule.source === "manual" || rule.source === "fixed") return rule.value || "";
+    if (rule.source === "url") return new URL(location.href).searchParams.get(rule.value || rule.attribute || "") || "";
+    if (rule.source === "css" || rule.source === "attribute") { const el = safeQuery(rule.selector); const value = rule.source === "attribute" ? el?.getAttribute(rule.attribute || "") || "" : field.startsWith("sheet") && /^(SELECT|INPUT)$/i.test(el?.tagName || "") ? text(el.selectedOptions?.[0]) || el.value || "" : text(el); return field === "article" ? cleanArticle(value) : field === "unit" ? unitFromPrice(value) || value : value; }
+    if (rule.source === "regex") { try { return (document.body.innerText.match(new RegExp(rule.regex, "im")) || [])[1] || ""; } catch (_) { return ""; } }
+    if (rule.source === "jsonld") {
+      if (["sheetLength", "sheetWidth", "sheetThickness"].includes(field)) return dimensionMetadata(data, field)[0] || "";
+      if (field === "price") return String(offers([data])[0]?.price ?? "");
+      if (field === "unit") return offerUnit(offers([data])[0]);
+      return String(data[field === "name" ? "name" : "sku"] || "");
+    }
+    return "";
+  }
+  function candidates(field, blacklist = []) {
+    if (["sheetLength", "sheetWidth", "sheetThickness"].includes(field)) return dimensionCandidates(field);
+    if (field === "price") return [...new Set([
+      ...offers(jsonLd()).map(o => o.price ?? o.priceSpecification?.price), ...priceNodes().map(priceText)
+    ].map(v => YSCFormatter.priceNumber(removeBlocked(v, blacklist))).filter(Boolean))];
+    if (field === "unit") return [...new Set([
+      ...offers(jsonLd()).map(offerUnit), text(document.querySelector('[itemprop="unitText"]')),
+      ...priceNodes().map(el => unitFromPrice(text(el)))
+    ].filter(Boolean))];
+    const products = jsonLd(); const key = field === "name" ? "name" : "sku";
+    const values = products.map(p => p[key]).filter(v => typeof v === "string" && v.trim());
+    if (field === "name") values.push(text(document.querySelector('[itemprop="name"]')), document.querySelector('meta[property="og:title"]')?.content, text(document.querySelector('h1')));
+    if (field === "article") values.push(document.querySelector('[itemprop="sku"]')?.getAttribute("content"), text(document.querySelector('[itemprop="sku"], [data-sku], [class*="sku" i], [class*="article" i]')), ...labelledArticles());
+    return [...new Set(values.filter(Boolean).map(v => field === "article" ? cleanArticle(v) : String(v).trim()))];
+  }
+  function dimensionMetadata(product, field) {
+    const label = field === "sheetLength" ? /^(?:довжина|длина|length)$/iu : field === "sheetWidth" ? /^(?:ширина|width)$/iu : /^(?:товщина|толщина|thickness)$/iu;
+    const values = [];
+    const quantity = product[field === "sheetLength" ? "length" : field === "sheetWidth" ? "width" : "thickness"];
+    if (quantity?.value != null && /^(?:mm|мм|m|м|MMT|MTR)$/i.test(quantity.unitText || quantity.unitCode || "")) values.push(`${quantity.value} ${/^(?:MMT)$/i.test(quantity.unitCode) ? "mm" : /^(?:MTR)$/i.test(quantity.unitCode) ? "m" : quantity.unitText || quantity.unitCode}`);
+    for (const property of [].concat(product.additionalProperty || [])) {
+      if (!label.test(String(property.name || "").split(",")[0].trim())) continue;
+      const unit = property.unitText || property.unitCode || String(property.name).match(/,\s*(мм|mm|м|m)\s*$/iu)?.[1];
+      if (property.value != null && unit) values.push(`${property.value} ${unit === "MMT" ? "mm" : unit === "MTR" ? "m" : unit}`);
+    }
+    return values;
+  }
+  function dimensionCandidates(field) {
+    const label = field === "sheetLength" ? "(?:довжина|длина|length)" : field === "sheetWidth" ? "(?:ширина|width)" : "(?:товщина|толщина|thickness)";
+    const pattern = new RegExp(`^${label}\\s*[,:(]?\\s*(мм|mm|м|m)\\s*[):]?\\s*(\\d+(?:[.,]\\d+)?)\\s*$`, "iu");
+    const values = jsonLd().flatMap(product => dimensionMetadata(product, field));
+    for (const el of document.querySelectorAll("tr, li, div, p, dd")) {
+      if (el.closest?.("#ysc-panel, [data-ysc-notice]") || !el.getClientRects?.().length) continue;
+      const value = text(el);
+      if (value.length > 100) continue;
+      const match = value.match(pattern);
+      if (match) values.push(`${match[2]} ${match[1]}`);
+    }
+    return [...new Set(values.filter(v => YSCFormatter.dimensionMetres(v)))];
+  }
+  function parse(profile = {}) {
+    const product = jsonLd()[0] || {};
+    const fields = profile.fields || {};
+    const cleanValues = values => [...new Set(values.map(v => removeBlocked(v, profile.blacklist)).filter(Boolean))];
+    const articleValues = cleanValues(fields.article?.source === "auto" || !fields.article ? candidates("article") : [sourceValue(fields.article, "article", product)].filter(Boolean));
+    const nameValues = cleanValues(fields.name?.source === "auto" || !fields.name ? candidates("name") : [sourceValue(fields.name, "name", product)].filter(Boolean));
+    const valuesFor = key => cleanValues(fields[key]?.source === "auto" || !fields[key] ? candidates(key, profile.blacklist) : [sourceValue(fields[key], key, product)].filter(Boolean));
+    const priceValues = valuesFor("price").map(YSCFormatter.priceNumber).filter(Boolean), unitValues = valuesFor("unit");
+    const supplier = removeBlocked(profile.supplier || sourceValue(fields.supplier, "supplier", product) || location.hostname.split(".").slice(-2, -1)[0], profile.blacklist);
+    const sheetLength = profile.format?.sheet ? valuesFor("sheetLength") : [], sheetWidth = profile.format?.sheet ? valuesFor("sheetWidth") : [];
+    const sheetThickness = profile.format?.sheet ? [...new Set(valuesFor("sheetThickness").map(YSCFormatter.thicknessMm).filter(Boolean))] : [];
+    return { supplier, article: articleValues[0] || "", name: nameValues[0] || "", price: priceValues[0] || "", unit: unitValues[0] || "", sheetLength: sheetLength[0] || "", sheetWidth: sheetWidth[0] || "", sheetThickness: sheetThickness[0] || "", candidates: { article: articleValues, name: nameValues, price: priceValues, unit: unitValues, sheetLength, sheetWidth, sheetThickness }, productDetected: Boolean(product.name || text(document.querySelector("h1"))) };
+  }
+  return { parse, candidates, safeQuery, text, cleanArticle, removeBlocked };
+})();

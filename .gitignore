@@ -1,0 +1,9 @@
+node_modules/
+dist/
+*.crx
+*.pem
+*.log
+*.bak
+*.tmp
+# User-supplied research screenshot, not part of the extension.
+/ec7c12f2-ae0b-47fc-9270-f5252c49b9c2.jpg

@@ -1,0 +1,92 @@
+#ysc-panel {
+  position:fixed; z-index:2147483647; right:20px; top:20px;
+  width:min(390px, calc(100vw - 40px)); max-height:calc(100vh - 40px);
+  display:flex; flex-direction:column; overflow:hidden;
+  background:#fff; color:#18212f; border:1px solid #d8dee9; border-radius:12px;
+  box-shadow:0 12px 38px #0004; font:14px/1.4 system-ui,sans-serif;
+}
+#ysc-panel * { box-sizing:border-box; }
+#ysc-panel .ysc-body { padding:14px; overflow-y:auto; min-height:0; }
+#ysc-panel h2 { font-size:16px; margin:0 0 10px; }
+#ysc-panel .ysc-heading { display:flex; align-items:center; gap:8px; }
+#ysc-panel .ysc-heading img { width:24px; height:24px; flex-shrink:0; object-fit:contain; }
+#ysc-panel h3 { font-size:14px; margin:10px 0 4px; }
+#ysc-panel label { display:block; margin:7px 0 3px; font-weight:600; }
+#ysc-panel input,#ysc-panel select,#ysc-panel textarea {
+  width:100%; padding:7px; border:1px solid #aeb8c7; border-radius:6px;
+  background:inherit; color:inherit; font:inherit;
+}
+#ysc-panel input[type="checkbox"] {
+  width:16px; height:16px; padding:0; margin:0 7px 0 0;
+  vertical-align:middle; flex-shrink:0;
+}
+#ysc-panel label:has(input[type="checkbox"]) {
+  display:flex; align-items:center; font-weight:400; margin:8px 0;
+}
+#ysc-panel button {
+  padding:8px 10px; border:0; border-radius:6px;
+  background:#175cd3; color:#fff; cursor:pointer; font:inherit; margin:6px 4px 0 0;
+}
+#ysc-panel button.secondary { background:#e7edf8; color:#18212f; }
+#ysc-panel details { border-top:1px solid #d8dee9; margin-top:10px; padding-top:8px; }
+#ysc-panel summary { cursor:pointer; font-weight:600; padding:3px 0; }
+#ysc-panel .ysc-rule + .ysc-rule { border-top:1px solid #d8dee9; margin-top:12px; }
+#ysc-panel .ysc-pricing { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+#ysc-panel .ysc-pricing > div { min-width:0; display:flex; flex-direction:column; }
+#ysc-panel .ysc-sheet-meta { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; align-items:end; }
+#ysc-panel .ysc-sheet-meta label { font-size:12px; }
+#ysc-panel .ysc-field-picker { position:relative; min-width:0; }
+#ysc-panel .ysc-field-picker input { padding-right:36px; min-width:0; }
+#ysc-panel .ysc-field-picker .ysc-pick-icon {
+  position:absolute; right:4px; top:50%; transform:translateY(-50%);
+  width:26px; height:26px; padding:0; margin:0; border-radius:4px;
+  display:grid; place-items:center; background:transparent; color:#ef7900;
+  font-size:21px; font-weight:700; line-height:1;
+}
+#ysc-panel .ysc-pick-icon:hover { background:#ef79001a; }
+#ysc-panel .ysc-pick-icon:focus-visible { outline:2px solid #ef7900; outline-offset:1px; }
+#ysc-panel .ysc-cursor-icon {
+  display:block; width:12px; height:14px; background:currentColor; pointer-events:none;
+  clip-path:polygon(8% 0, 8% 81%, 34% 60%, 55% 100%, 77% 90%, 56% 50%, 94% 50%);
+}
+#ysc-panel .ysc-excel-mapping { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; }
+#ysc-panel .ysc-language { display:grid; grid-template-columns:1fr 1fr; gap:8px; align-items:center; margin:8px 0 12px; }
+#ysc-panel .ysc-language label { margin:0; font-size:12px; }
+#ysc-panel .ysc-excel-mapping label { font-size:12px; }
+#ysc-panel .ysc-excel-row { display:flex; overflow-x:auto; gap:4px; margin-top:10px; }
+#ysc-panel .ysc-excel-row > div { flex:0 0 145px; min-width:0; text-align:center; padding:6px; border:1px solid #aeb8c7; border-radius:5px; font-size:11px; }
+#ysc-panel .ysc-excel-row label { margin:0 0 5px; }
+#ysc-panel .ysc-excel-row select { font-size:12px; padding:6px 3px; }
+#ysc-panel .ysc-cell-write { border-bottom:3px solid #175cd3 !important; }
+#ysc-panel .ysc-cell-skip { border-style:dashed; }
+#ysc-panel .ysc-domain-manager p { font-size:12px; margin:6px 0; }
+#ysc-panel .ysc-last-url { overflow-wrap:anywhere; }
+#ysc-panel .ysc-profile-open { display:flex; align-items:center; gap:8px; }
+#ysc-panel .ysc-profile-open button { flex-shrink:0; }
+#ysc-panel .ysc-profile-open span { font-weight:600; overflow-wrap:anywhere; }
+#ysc-panel .ysc-backup-controls { border-top:1px solid #aeb8c7; margin-top:10px; padding-top:4px; }
+#ysc-panel #ysc-help a { color:#ef7900; text-decoration:underline; }
+#ysc-panel .ysc-help-note { font-size:12px; }
+#ysc-panel .ysc-domain-manager select[size] { min-height:125px; }
+#ysc-panel .ysc-domain-manager option { padding:3px 5px; }
+#ysc-panel .ysc-domain-profile { border-top:1px solid #aeb8c7; margin-top:10px; padding-top:3px; }
+#ysc-panel button:disabled { opacity:0.5; cursor:not-allowed; }
+#ysc-panel .ysc-excel-steps p, #ysc-panel #ysc-excel-settings p { font-size:12px; margin:8px 0; }
+#ysc-panel .ysc-preview { white-space:pre-wrap; tab-size:4; }
+#ysc-panel .ysc-preview-target { color:#ef7900; font-size:12px; font-weight:600; }
+#ysc-panel .ysc-preview-block + .ysc-preview-block { margin-top:6px; }
+#ysc-panel .ysc-footer {
+  display:flex; flex-wrap:wrap; gap:6px; flex-shrink:0;
+  padding:10px 14px; border-top:1px solid #d8dee9;
+}
+#ysc-panel .ysc-footer button { margin:0; font-size:13px; }
+#ysc-panel .ysc-preview { background:#eef4ff; padding:9px; border-radius:6px; overflow-wrap:anywhere; }
+.ysc-error { color:#b42318; }
+.ysc-picker-outline { position:fixed; pointer-events:none; z-index:2147483646; outline:3px solid #1769ff; background:#1769ff22; }
+@media(prefers-color-scheme:dark) {
+  #ysc-panel { background:#172033; color:#f4f7fb; border-color:#43526a; }
+  #ysc-panel input,#ysc-panel select,#ysc-panel textarea { border-color:#667790; }
+  #ysc-panel .ysc-preview { background:#203252; }
+  #ysc-panel details,#ysc-panel .ysc-rule + .ysc-rule,#ysc-panel .ysc-footer { border-color:#43526a; }
+  #ysc-panel button.secondary { background:#2a3c59; color:#f4f7fb; }
+}

@@ -1,0 +1,5 @@
+:root { color-scheme:light dark; font-family:system-ui,sans-serif; }
+body { margin:0; }
+main { max-width:1000px; margin:32px auto; padding:0 24px; }
+h1 { font-size:24px; color:#ef7900; }
+pre { white-space:pre-wrap; overflow-wrap:anywhere; font:14px/1.6 ui-monospace,monospace; }
