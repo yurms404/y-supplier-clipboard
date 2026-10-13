@@ -11,6 +11,9 @@ New-Item -ItemType Directory -Path $releaseStage | Out-Null
 foreach ($releaseFile in $releaseFiles) {
     Copy-Item -LiteralPath (Join-Path $releaseRoot $releaseFile) -Destination $releaseStage -Recurse
 }
+if (Test-Path -LiteralPath (Join-Path $releaseRoot 'docs')) {
+    Copy-Item -LiteralPath (Join-Path $releaseRoot 'docs') -Destination $releaseStage -Recurse
+}
 New-Item -ItemType Directory -Path (Join-Path $releaseStage 'icons') | Out-Null
 foreach ($releaseSize in @(16, 32, 48, 128)) {
     Copy-Item -LiteralPath (Join-Path $releaseRoot "icons/icon-$releaseSize.png") -Destination (Join-Path $releaseStage 'icons')

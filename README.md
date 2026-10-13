@@ -102,7 +102,7 @@
 
 Стабільний код: `main`, тег `v1.5.1`. Майбутні правки: `develop`. Стислий [контекст розробки](docs/DEVELOPMENT_CONTEXT.md) та [дослідження наступної версії](docs/RESEARCH_NEXT_VERSION.md) збережені в гілці `develop`.
 
-Для передачі колегам виконайте `powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1` у `develop`: ZIP у `dist/` містить лише файли розширення, README та MIT; без тестів, вихідних зображень, особистого скриншота та `.git`. Розпакуйте архів, потім завантажте папку через **Load unpacked**. Наявний ZIP не перезаписується.
+Для передачі колегам виконайте `powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1` у `develop`: ZIP у `dist/` містить файли розширення, README, MIT та довідкові документи; без тестів, вихідних зображень, особистого скриншота та `.git`. Розпакуйте архів, потім завантажте папку через **Load unpacked**. Наявний ZIP не перезаписується.
 
 Потрібен Node.js. Запустіть `npm test` для тестів форматування і `npm run check` для синтаксичної перевірки JavaScript.
 
