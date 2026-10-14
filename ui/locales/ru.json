@@ -212,5 +212,8 @@
   "check_dimensions": "Проверьте размер: {unit}",
   "enter_a_valid_sheet_length_and_width": "Введите корректные длину и ширину листа.",
   "enter_the_sheet_unit": "Укажите единицу измерения листа.",
-  "check_and_confirm_sheet_dimensions_before_copying": "Уточните и подтвердите размер листа перед копированием."
+  "check_and_confirm_sheet_dimensions_before_copying": "Уточните и подтвердите размер листа перед копированием.",
+  "update_available": "Доступно обновление {version}",
+  "update_available_details": "Новая версия расширения уже опубликована на GitHub.",
+  "open_github_release": "Открыть релиз на GitHub"
 }

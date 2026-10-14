@@ -1,5 +1,5 @@
 globalThis.YSCPicker = (() => {
-  let active = false, target, onPick;
+  let active = false, target, onPick, onCancel;
   const outline = document.createElement("div"); outline.className = "ysc-picker-outline";
   function selectorFor(el) {
     const unique = selector => { const matches = document.querySelectorAll(selector); return matches.length === 1 && matches[0] === el; };
@@ -33,7 +33,8 @@ globalThis.YSCPicker = (() => {
     return { imageSelector: selectorFor(image), imageAttribute: attribute || "src", imageUrl: image.currentSrc || image.getAttribute(attribute || "src") || "" };
   }
   function click(e) { if (!active || e.target.closest("#ysc-panel")) return; e.preventDefault(); e.stopImmediatePropagation(); const selected = { selector: selectorFor(e.target), text: YSCParser.text(e.target), ...(target === "price" ? { price: YSCParser.priceText(e.target), currency: YSCParser.priceCurrency(e.target) } : {}), ...imageData(e.target) }; stop(); onPick?.(selected); }
-  function start(field, callback) { active = true; target = field; onPick = callback; document.documentElement.append(outline); document.addEventListener("mousemove", move, true); document.addEventListener("click", click, true); }
-  function stop() { active = false; outline.remove(); document.removeEventListener("mousemove", move, true); document.removeEventListener("click", click, true); }
+  function keydown(e) { if (!active || e.key !== "Escape") return; e.preventDefault(); e.stopImmediatePropagation(); const callback = onCancel; stop(); callback?.(); }
+  function start(field, callback, cancelCallback) { active = true; target = field; onPick = callback; onCancel = cancelCallback; document.documentElement.append(outline); document.addEventListener("mousemove", move, true); document.addEventListener("click", click, true); document.addEventListener("keydown", keydown, true); }
+  function stop() { active = false; outline.remove(); document.removeEventListener("mousemove", move, true); document.removeEventListener("click", click, true); document.removeEventListener("keydown", keydown, true); }
   return { start, stop };
 })();

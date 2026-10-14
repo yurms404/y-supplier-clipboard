@@ -40,10 +40,10 @@ const context = {
     removeDomain: async domain => { deletedDomains.push(domain); domainProfiles = domainProfiles.filter(p => p.domain !== domain); }
   },
   YSCParser: { parse: () => structuredClone(product), removeBlocked: value => value },
-  YSCPicker: { stop() {}, start(key, callback) { picked.push(key); this.callback = callback; } },
+  YSCPicker: { stop() {}, start(key, callback, cancelCallback) { picked.push(key); this.callback = callback; this.cancel = cancelCallback; } },
   chrome: {
     storage: { local: { get: async () => ({ ...stored }), set: async value => Object.assign(stored, value) } },
-    runtime: { getManifest: () => JSON.parse(fs.readFileSync("manifest.json", "utf8")), getURL: path => `chrome-extension://test/${path}`, sendMessage: async message => { if (message.type === "YSC_SAVE_STYLE") exportedStyles.push(message); else copied.push(message.text); return { ok: true }; }, onMessage: { addListener: callback => { listener = callback; } } }
+    runtime: { getManifest: () => JSON.parse(fs.readFileSync("manifest.json", "utf8")), getURL: path => `chrome-extension://test/${path}`, sendMessage: async message => { if (message.type === "YSC_SAVE_STYLE") exportedStyles.push(message); else if (message.type === "YSC_CHECK_UPDATE") return { update: null }; else copied.push(message.text); return { ok: true }; }, onMessage: { addListener: callback => { listener = callback; } } }
   }
 };
 vm.createContext(context);
@@ -476,6 +476,10 @@ const copied = [];
   assert.equal(copied.at(-1), "Manual product\t", "The price destination is left empty, not filled with zero");
   listener({ type: "YSC_CONFIGURE" }); await settle(); panel = root.querySelector("#ysc-panel");
   const nameBeforePick = panel.querySelector("#ysc-value-name"); nameBeforePick.value = "Corrected name"; nameBeforePick.listeners.input();
+  panel.querySelector("#ysc-pick-price").onclick();
+  assert.equal(panel.style.display, "none", "Picker hides the panel while selecting on the page");
+  context.YSCPicker.cancel();
+  assert.equal(panel.style.display, "flex", "Cancelling selection returns to the panel without changing a field");
   panel.querySelector("#ysc-pick-price").onclick();
   product.price = "9.59"; product.candidates.price = ["9.59"];
   context.YSCPicker.callback({ selector: ".chosen-price", price: "12,24 євро", text: "12,24 євро" });

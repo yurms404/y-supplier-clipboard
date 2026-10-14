@@ -212,5 +212,8 @@
   "check_dimensions": "Pārbaudiet izmērus: {unit}",
   "enter_a_valid_sheet_length_and_width": "Ievadiet derīgu plātnes garumu un platumu.",
   "enter_the_sheet_unit": "Norādiet plātnes mērvienību.",
-  "check_and_confirm_sheet_dimensions_before_copying": "Pirms kopēšanas pārbaudiet un apstipriniet plātnes izmērus."
+  "check_and_confirm_sheet_dimensions_before_copying": "Pirms kopēšanas pārbaudiet un apstipriniet plātnes izmērus.",
+  "update_available": "Ir pieejams atjauninājums {version}",
+  "update_available_details": "Jaunāka paplašinājuma versija ir publicēta GitHub.",
+  "open_github_release": "Atvērt GitHub laidienu"
 }

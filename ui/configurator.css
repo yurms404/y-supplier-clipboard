@@ -16,6 +16,9 @@
 #ysc-panel h2 { font-size:16px; margin:0 0 10px; }
 #ysc-panel .ysc-heading { display:flex; align-items:center; gap:8px; }
 #ysc-panel .ysc-heading img { width:24px; height:24px; flex-shrink:0; object-fit:contain; }
+#ysc-panel .ysc-update-banner { display:grid; gap:4px; margin:-2px 0 10px; padding:9px; border:1px solid var(--ysc-accent); border-radius:6px; background:color-mix(in srgb, var(--ysc-accent) 10%, var(--ysc-surface)); }
+#ysc-panel .ysc-update-banner strong, #ysc-panel .ysc-update-banner span { color:var(--ysc-text); }
+#ysc-panel .ysc-update-banner a { color:var(--ysc-accent); font-weight:600; text-decoration:underline; width:max-content; }
 #ysc-panel .ysc-quick-result { display:grid; grid-template-columns:minmax(0,1fr) 30px; align-items:start; gap:5px; }
 #ysc-panel #ysc-quick-preview { background:var(--ysc-preview); color:var(--ysc-text); padding:9px; border-radius:6px; overflow-wrap:anywhere; }
 #ysc-panel .ysc-style-select { display:grid; grid-template-columns:minmax(0,1fr) 30px; gap:5px; align-items:center; }

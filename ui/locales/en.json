@@ -212,5 +212,8 @@
   "check_dimensions": "Check dimensions: {unit}",
   "enter_a_valid_sheet_length_and_width": "Enter a valid sheet length and width.",
   "enter_the_sheet_unit": "Enter the sheet unit.",
-  "check_and_confirm_sheet_dimensions_before_copying": "Check and confirm sheet dimensions before copying."
+  "check_and_confirm_sheet_dimensions_before_copying": "Check and confirm sheet dimensions before copying.",
+  "update_available": "Update {version} is available",
+  "update_available_details": "A newer version of the extension has been published on GitHub.",
+  "open_github_release": "Open GitHub release"
 }

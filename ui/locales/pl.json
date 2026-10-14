@@ -212,5 +212,8 @@
   "check_dimensions": "Sprawdź wymiary: {unit}",
   "enter_a_valid_sheet_length_and_width": "Podaj prawidłową długość i szerokość płyty.",
   "enter_the_sheet_unit": "Podaj jednostkę miary płyty.",
-  "check_and_confirm_sheet_dimensions_before_copying": "Sprawdź i potwierdź wymiary płyty przed kopiowaniem."
+  "check_and_confirm_sheet_dimensions_before_copying": "Sprawdź i potwierdź wymiary płyty przed kopiowaniem.",
+  "update_available": "Dostępna jest aktualizacja {version}",
+  "update_available_details": "Nowsza wersja rozszerzenia została opublikowana na GitHubie.",
+  "open_github_release": "Otwórz wydanie GitHub"
 }

@@ -212,5 +212,8 @@
   "check_dimensions": "Kontrollige mõõtmeid: {unit}",
   "enter_a_valid_sheet_length_and_width": "Sisestage kehtiv plaadi pikkus ja laius.",
   "enter_the_sheet_unit": "Sisestage plaadi mõõtühik.",
-  "check_and_confirm_sheet_dimensions_before_copying": "Kontrollige ja kinnitage plaadi mõõtmed enne kopeerimist."
+  "check_and_confirm_sheet_dimensions_before_copying": "Kontrollige ja kinnitage plaadi mõõtmed enne kopeerimist.",
+  "update_available": "Värskendus {version} on saadaval",
+  "update_available_details": "Laienduse uuem versioon on GitHubis avaldatud.",
+  "open_github_release": "Ava GitHubi väljalase"
 }

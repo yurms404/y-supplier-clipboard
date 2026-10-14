@@ -104,6 +104,18 @@
     return box;
   }
   const $ = (tag, attrs = {}, children = []) => { const e = document.createElement(tag); Object.assign(e, attrs); children.forEach(c => e.append(c)); return e; };
+  function showUpdateBanner() {
+    chrome.runtime.sendMessage({ type: "YSC_CHECK_UPDATE" }).then(reply => {
+      const update = reply?.update;
+      if (!update || !panel?.isConnected || panel.querySelector("#ysc-update-banner")) return;
+      const banner = $("section", { id: "ysc-update-banner", className: "ysc-update-banner", role: "status" }, [
+        $("strong", { textContent: t("update_available", { version: update.version }) }),
+        $("span", { textContent: t("update_available_details") }),
+        $("a", { textContent: t("open_github_release"), href: update.url, target: "_blank", rel: "noopener noreferrer" })
+      ]);
+      panel.querySelector(".ysc-heading")?.after(banner);
+    }).catch(() => {});
+  }
   function toast(message, error = false) { const n = $("div", { textContent: message, className: error ? "ysc-error" : "" }); Object.assign(n.style, { position:"fixed", zIndex:2147483647, bottom:"20px", right:"20px", background:"#172033", color:"white", padding:"10px 14px", borderRadius:"7px", maxWidth:"min(600px, calc(100vw - 40px))", overflowWrap:"anywhere", whiteSpace:"pre-wrap" }); document.documentElement.append(n); setTimeout(() => n.remove(), 8000); }
   function input(label, value, change, type = "text", event = "input") { const l = $("label", { textContent: t(label) }), i = $("input", { type, value: value || "" }); i.addEventListener(event, () => change(i.value, i)); return [l, i]; }
   function inlinePicker(field, key, title, pick = () => pickField(key)) {
@@ -439,7 +451,7 @@
         result.sheetThickness = parsed.sheetThickness || "";
         result.candidates.sheetThickness = parsed.candidates.sheetThickness || [];
         nextExcelBlock = 0; render();
-      });
+      }, () => { if (panel?.isConnected) panel.style.display = "flex"; });
     });
     box.append($("div", { className: "ysc-sheet-meta" }, profile.format.sheetRod ? [unitsBox] : [unitsBox, thicknessBox]));
     const row = $("div", { className: "ysc-pricing" });
@@ -461,7 +473,7 @@
           profile.fields[key] = { ...profile.fields[key], enabled: true, source: "css", selector: selected.selector };
           result[key] = YSCParser.parse(profile)[key] || "";
           result.sheetConfirmed = false; nextExcelBlock = 0; render();
-        });
+        }, () => { if (panel?.isConnected) panel.style.display = "flex"; });
       });
       row.append(column);
     }
@@ -532,7 +544,7 @@
       if (key === "unit") { result.sheetConfirmed = false; result.unitDefaulted = parsed.unitDefaulted; }
       nextExcelBlock = 0; render();
       if (!result[key]) panel.querySelector(`#ysc-value-${key}`)?.focus?.();
-    });
+    }, () => { if (panel?.isConnected) panel.style.display = "flex"; });
   }
   function pickImage() {
     panel.style.display = "none";
@@ -542,7 +554,7 @@
       const rule = profile.fields.imageUrl ||= { enabled: true, source: "auto", selector: "", regex: "", attribute: "", value: "" };
       rule.enabled = true; rule.source = "attribute"; rule.selector = selected.imageSelector; rule.attribute = selected.imageAttribute;
       rerun();
-    });
+    }, () => { if (panel?.isConnected) panel.style.display = "flex"; });
   }
   function fieldEditor(key, title) {
     const rule = profile.fields[key] ||= { enabled: true, source: "auto", selector: "", regex: "", attribute: "", value: "" }, section = $("section", { className: "ysc-rule" });
@@ -683,6 +695,7 @@
     panel.querySelectorAll("details").forEach(el => { el.open = opened.has(el.id); });
     document.documentElement.append(panel); body.scrollTop = scrollTop;
     panel.querySelector(".ysc-excel-row").scrollLeft = columnScroll;
+    showUpdateBanner();
   }
   async function run(forcePanel = false) {
     await YSCI18n.load();

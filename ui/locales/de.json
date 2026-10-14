@@ -212,5 +212,8 @@
   "check_dimensions": "Abmessungen prüfen: {unit}",
   "enter_a_valid_sheet_length_and_width": "Geben Sie eine gültige Plattenlänge und -breite ein.",
   "enter_the_sheet_unit": "Geben Sie die Maßeinheit der Platte ein.",
-  "check_and_confirm_sheet_dimensions_before_copying": "Prüfen und bestätigen Sie die Plattenabmessungen vor dem Kopieren."
+  "check_and_confirm_sheet_dimensions_before_copying": "Prüfen und bestätigen Sie die Plattenabmessungen vor dem Kopieren.",
+  "update_available": "Update {version} ist verfügbar",
+  "update_available_details": "Eine neuere Version der Erweiterung wurde auf GitHub veröffentlicht.",
+  "open_github_release": "GitHub-Release öffnen"
 }
