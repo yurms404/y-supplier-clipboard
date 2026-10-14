@@ -23,10 +23,10 @@ function isNewerVersion(candidate, current) {
   return false;
 }
 
-async function checkForUpdate() {
+async function checkForUpdate(force = false) {
   const currentVersion = chrome.runtime.getManifest().version;
   const { ysc_update_check: cached } = await chrome.storage.local.get("ysc_update_check");
-  if (cached?.localVersion === currentVersion && Date.now() - cached.checkedAt < UPDATE_CHECK_INTERVAL) return cached.update || null;
+  if (!force && cached?.localVersion === currentVersion && Date.now() - cached.checkedAt < UPDATE_CHECK_INTERVAL) return cached.update || null;
   try {
     const response = await fetch(UPDATE_ENDPOINT, { headers: { Accept: "application/vnd.github+json" } });
     if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
@@ -56,7 +56,7 @@ chrome.action.onClicked.addListener(async tab => {
 
 chrome.runtime.onMessage.addListener((message, _sender, reply) => {
   if (message.type === "YSC_CHECK_UPDATE") {
-    checkForUpdate().then(update => reply({ update })).catch(() => reply({ update: null }));
+    checkForUpdate(Boolean(message.force)).then(update => reply({ update })).catch(() => reply({ update: null }));
     return true;
   }
   if (message.type === "YSC_SAVE_STYLE") {

@@ -215,5 +215,8 @@
   "check_and_confirm_sheet_dimensions_before_copying": "Kontrollige ja kinnitage plaadi mõõtmed enne kopeerimist.",
   "update_available": "Värskendus {version} on saadaval",
   "update_available_details": "Laienduse uuem versioon on GitHubis avaldatud.",
-  "open_github_release": "Ava GitHubi väljalase"
+  "open_github_release": "Ava GitHubi väljalase",
+  "check_for_updates": "Otsi värskendusi",
+  "checking_for_updates": "Otsime värskendusi…",
+  "up_to_date": "Kasutate uusimat versiooni {version}."
 }

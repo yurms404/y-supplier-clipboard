@@ -215,5 +215,8 @@
   "check_and_confirm_sheet_dimensions_before_copying": "Pirms kopēšanas pārbaudiet un apstipriniet plātnes izmērus.",
   "update_available": "Ir pieejams atjauninājums {version}",
   "update_available_details": "Jaunāka paplašinājuma versija ir publicēta GitHub.",
-  "open_github_release": "Atvērt GitHub laidienu"
+  "open_github_release": "Atvērt GitHub laidienu",
+  "check_for_updates": "Pārbaudīt atjauninājumus",
+  "checking_for_updates": "Pārbaudām atjauninājumus…",
+  "up_to_date": "Jums ir jaunākā versija {version}."
 }

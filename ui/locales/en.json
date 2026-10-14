@@ -215,5 +215,8 @@
   "check_and_confirm_sheet_dimensions_before_copying": "Check and confirm sheet dimensions before copying.",
   "update_available": "Update {version} is available",
   "update_available_details": "A newer version of the extension has been published on GitHub.",
-  "open_github_release": "Open GitHub release"
+  "open_github_release": "Open GitHub release",
+  "check_for_updates": "Check for updates",
+  "checking_for_updates": "Checking for updates…",
+  "up_to_date": "You have the latest version, {version}."
 }

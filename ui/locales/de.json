@@ -215,5 +215,8 @@
   "check_and_confirm_sheet_dimensions_before_copying": "Prüfen und bestätigen Sie die Plattenabmessungen vor dem Kopieren.",
   "update_available": "Update {version} ist verfügbar",
   "update_available_details": "Eine neuere Version der Erweiterung wurde auf GitHub veröffentlicht.",
-  "open_github_release": "GitHub-Release öffnen"
+  "open_github_release": "GitHub-Release öffnen",
+  "check_for_updates": "Nach Updates suchen",
+  "checking_for_updates": "Suche nach Updates…",
+  "up_to_date": "Sie verwenden die neueste Version {version}."
 }

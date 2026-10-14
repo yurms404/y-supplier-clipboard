@@ -104,8 +104,8 @@
     return box;
   }
   const $ = (tag, attrs = {}, children = []) => { const e = document.createElement(tag); Object.assign(e, attrs); children.forEach(c => e.append(c)); return e; };
-  function showUpdateBanner() {
-    chrome.runtime.sendMessage({ type: "YSC_CHECK_UPDATE" }).then(reply => {
+  function showUpdateBanner(force = false) {
+    return chrome.runtime.sendMessage({ type: "YSC_CHECK_UPDATE", force }).then(reply => {
       const update = reply?.update;
       if (!update || !panel?.isConnected || panel.querySelector("#ysc-update-banner")) return;
       const banner = $("section", { id: "ysc-update-banner", className: "ysc-update-banner", role: "status" }, [
@@ -114,7 +114,8 @@
         $("a", { textContent: t("open_github_release"), href: update.url, target: "_blank", rel: "noopener noreferrer" })
       ]);
       panel.querySelector(".ysc-heading")?.after(banner);
-    }).catch(() => {});
+      return update;
+    }).catch(() => null);
   }
   function toast(message, error = false) { const n = $("div", { textContent: message, className: error ? "ysc-error" : "" }); Object.assign(n.style, { position:"fixed", zIndex:2147483647, bottom:"20px", right:"20px", background:"#172033", color:"white", padding:"10px 14px", borderRadius:"7px", maxWidth:"min(600px, calc(100vw - 40px))", overflowWrap:"anywhere", whiteSpace:"pre-wrap" }); document.documentElement.append(n); setTimeout(() => n.remove(), 8000); }
   function input(label, value, change, type = "text", event = "input") { const l = $("label", { textContent: t(label) }), i = $("input", { type, value: value || "" }); i.addEventListener(event, () => change(i.value, i)); return [l, i]; }
@@ -664,11 +665,23 @@
     const settings = folded("settings", t("settings"), [imageSettingsBox, profilesBox, panel.querySelector("#ysc-blacklist"), formatRules]);
     settings.querySelector("summary").after(languageSelector());
     const helpLink = (label, path) => $("a", { textContent: t(label), href: path, target: "_blank", rel: "noopener noreferrer" });
+    const updateStatus = $("p", { id: "ysc-update-status", className: "ysc-help-note" });
+    const checkUpdate = $("button", { id: "ysc-check-update", className: "secondary", textContent: t("check_for_updates") });
+    checkUpdate.onclick = async () => {
+      checkUpdate.disabled = true; updateStatus.textContent = t("checking_for_updates");
+      const update = await showUpdateBanner(true);
+      updateStatus.textContent = update
+        ? t("update_available", { version: update.version })
+        : t("up_to_date", { version: chrome.runtime.getManifest().version });
+      checkUpdate.disabled = false;
+    };
     settings.append(folded("help", t("help"), [
       $("p", { id: "ysc-help-name", textContent: "Y Supplier Clipboard" }),
       $("p", { id: "ysc-help-description", textContent: t("supplier_clipboard_means_a_clipboard_for_supplier_data_the_extension") }),
       $("p", { id: "ysc-code-version", textContent: t("code_version", { version: chrome.runtime.getManifest().version }) }),
       $("p", { id: "ysc-revision-date", textContent: t("revision_date", { date: "14.10.2026" }) }),
+      checkUpdate,
+      updateStatus,
       $("p", {}, [helpLink("readme_md_instructions", chrome.runtime.getURL("ui/help.html?doc=readme"))]),
       $("p", {}, [helpLink("mit_license", chrome.runtime.getURL("ui/help.html?doc=license"))]),
       $("p", {}, [helpLink("telegram_support_yurms", "https://web.telegram.org/a/#-1001323392064_1018")])

@@ -215,5 +215,8 @@
   "check_and_confirm_sheet_dimensions_before_copying": "Уточніть і підтвердьте розмір листа перед копіюванням.",
   "update_available": "Доступне оновлення {version}",
   "update_available_details": "Нова версія розширення вже опублікована на GitHub.",
-  "open_github_release": "Відкрити реліз на GitHub"
+  "open_github_release": "Відкрити реліз на GitHub",
+  "check_for_updates": "Перевірити оновлення",
+  "checking_for_updates": "Перевіряємо оновлення…",
+  "up_to_date": "У вас встановлено найновішу версію {version}."
 }
