@@ -30,6 +30,7 @@ const product = { supplier: "VIYAR", article: "190218", name: "Гвинт цин
 const context = {
   crypto: require("node:crypto"),
   document, structuredClone, location: { hostname: "viyar.example", href: "https://viyar.example/product?variant=18#details", assign(url) { navigations.push(url); } }, setTimeout: () => 0,
+  fetch: async url => ({ ok: true, json: async () => JSON.parse(fs.readFileSync(url.replace("chrome-extension://test/", ""), "utf8")) }),
   confirm: message => { confirmations.push(message); return allowDelete; },
   YSCProfiles: {
     get: async () => structuredClone(profile), all: async () => structuredClone(domainProfiles),
@@ -98,6 +99,18 @@ const copied = [];
   assert.equal(root.querySelector("#ysc-panel").lang, "ru");
   assert.equal(root.querySelector("#ysc-language").children.find(option => option.selected).value, "ru");
   console.log("Panel language switching, persisted preference and manual edits passed");
+  assert.deepEqual(root.querySelector("#ysc-language").children.map(option => option.value), ["uk", "en", "ru", "de", "pl", "et", "lv"]);
+  for (const [language, settingsText] of [["de", "Einstellungen"], ["pl", "Ustawienia"], ["et", "Seaded"], ["lv", "Iestatījumi"]]) {
+    const articleBeforeLanguageSwitch = root.querySelector("#ysc-value-article").value;
+    const languageSelect = root.querySelector("#ysc-language"); languageSelect.value = language; await languageSelect.onchange();
+    assert.equal(root.querySelector("#ysc-panel").lang, language);
+    assert.equal(root.querySelector("#ysc-settings").querySelector("summary").textContent, settingsText);
+    assert.equal(root.querySelector("#ysc-value-article").value, articleBeforeLanguageSwitch);
+    assert.equal(stored.ysc_language, language);
+    root.querySelector("#ysc-panel").remove(); listener({ type: "YSC_CONFIGURE" }); await settle();
+    assert.equal(root.querySelector("#ysc-panel").lang, language, "New language survives reopening");
+  }
+  const returnToRussian = root.querySelector("#ysc-language"); returnToRussian.value = "ru"; await returnToRussian.onchange();
   root.querySelector("#ysc-panel").remove();
   profile.format.sheet = true;
   for (const key of ["sheetLength", "sheetWidth"]) profile.fields[key] = { enabled: true, source: "auto" };

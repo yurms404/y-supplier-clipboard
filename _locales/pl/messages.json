@@ -1,0 +1,4 @@
+{
+  "extensionDescription": { "message": "Kopiuje dostawcę, numer artykułu, nazwę, jednostkę i cenę produktu ze stron sklepów. Profile stron i formaty schowka dla CAD i Excela." },
+  "copyProduct": { "message": "Kopiuj dane produktu" }
+}
