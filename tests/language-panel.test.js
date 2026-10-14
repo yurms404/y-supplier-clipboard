@@ -21,7 +21,7 @@ class Element {
 const root = new Element("html");
 const document = { documentElement: root, createElement: tag => new Element(tag), createTextNode: value => Object.assign(new Element("#text"), { textContent: value }) };
 const profile = { id: "viyar", domain: "viyar.example", supplier: "VIYAR", fields: Object.fromEntries(["article", "name", "price", "unit"].map(key => [key, { enabled: true, source: "auto" }])), format: {} };
-let stored = {}, listener;
+let stored = {}, listener, availableUpdate = null;
 const picked = [], exportedStyles = [];
 let domainProfiles = [], allowDelete = true;
 const deletedDomains = [], confirmations = [];
@@ -43,7 +43,7 @@ const context = {
   YSCPicker: { stop() {}, start(key, callback, cancelCallback) { picked.push(key); this.callback = callback; this.cancel = cancelCallback; } },
   chrome: {
     storage: { local: { get: async () => ({ ...stored }), set: async value => Object.assign(stored, value) } },
-    runtime: { getManifest: () => JSON.parse(fs.readFileSync("manifest.json", "utf8")), getURL: path => `chrome-extension://test/${path}`, sendMessage: async message => { if (message.type === "YSC_SAVE_STYLE") exportedStyles.push(message); else if (message.type === "YSC_CHECK_UPDATE") return { update: null }; else copied.push(message.text); return { ok: true }; }, onMessage: { addListener: callback => { listener = callback; } } }
+    runtime: { getManifest: () => JSON.parse(fs.readFileSync("manifest.json", "utf8")), getURL: path => `chrome-extension://test/${path}`, sendMessage: async message => { if (message.type === "YSC_SAVE_STYLE") exportedStyles.push(message); else if (message.type === "YSC_CHECK_UPDATE") return { update: availableUpdate }; else copied.push(message.text); return { ok: true }; }, onMessage: { addListener: callback => { listener = callback; } } }
   }
 };
 vm.createContext(context);
@@ -84,6 +84,13 @@ const copied = [];
   assert.equal(checkUpdate.textContent, "Перевірити оновлення");
   await checkUpdate.onclick();
   assert.equal(help.querySelector("#ysc-update-status").textContent, `У вас встановлено найновішу версію ${JSON.parse(fs.readFileSync("manifest.json", "utf8")).version}.`);
+  availableUpdate = { version: "2.11.0", url: "https://github.com/yurms404/y-supplier-clipboard/releases/tag/v2.11.0" };
+  await checkUpdate.onclick();
+  assert.equal(panel.querySelectorAll("#ysc-update-banner").length, 1);
+  await checkUpdate.onclick();
+  assert.equal(help.querySelector("#ysc-update-status").textContent, "Доступне оновлення 2.11.0", "An existing banner must not make a repeated check report the installed version as latest");
+  assert.equal(panel.querySelectorAll("#ysc-update-banner").length, 1, "Repeated checks do not duplicate the banner");
+  availableUpdate = null;
   panel.querySelector("#ysc-settings").open = true;
   const article = panel.querySelector("#ysc-value-article"); article.value = "190218-corrected"; article.listeners.input();
   let select = panel.querySelector("#ysc-language"); select.value = "en"; await select.onchange();

@@ -107,7 +107,7 @@
   function showUpdateBanner(force = false) {
     return chrome.runtime.sendMessage({ type: "YSC_CHECK_UPDATE", force }).then(reply => {
       const update = reply?.update;
-      if (!update || !panel?.isConnected || panel.querySelector("#ysc-update-banner")) return;
+      if (!update || !panel?.isConnected || panel.querySelector("#ysc-update-banner")) return update || null;
       const banner = $("section", { id: "ysc-update-banner", className: "ysc-update-banner", role: "status" }, [
         $("strong", { textContent: t("update_available", { version: update.version }) }),
         $("span", { textContent: t("update_available_details") }),
