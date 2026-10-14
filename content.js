@@ -134,7 +134,7 @@
   function rerun() { nextExcelBlock = 0; result = YSCParser.parse(profile); render(); }
   function outputFields() {
     const cleaned = { ...result, url: location.href };
-    for (const key of ["supplier", "article", "name", "unit", "price"]) cleaned[key] = YSCParser.removeBlocked(result[key], profile.blacklist);
+    for (const key of ["supplier", "article", "name", "unit", "price", "currency"]) cleaned[key] = YSCParser.removeBlocked(result[key], profile.blacklist);
     return cleaned;
   }
   function blacklistSettings() {
@@ -147,12 +147,12 @@
       profile.blacklist = entries;
       const currentRevision = ++revision;
       const parsed = YSCParser.parse(profile);
-      for (const key of ["supplier", "article", "name", "price", "unit"]) {
+      for (const key of ["supplier", "article", "name", "price", "unit", "currency"]) {
         result[key] = parsed[key];
         const field = panel.querySelector(`#ysc-value-${key}`);
         if (field) field.value = result[key];
       }
-      result.candidates = parsed.candidates; result.confirmed = {}; result.sheetConfirmed = false;
+      result.candidates = parsed.candidates; result.unitDefaulted = parsed.unitDefaulted; result.confirmed = {}; result.sheetConfirmed = false;
       refreshPreview(); status.textContent = t("saving");
       try {
         await YSCProfiles.saveBlacklist(profile, entries);
@@ -229,7 +229,7 @@
     }
     if (profile.format.excelVertical) settings.append($("p", { textContent: t("in_enter_mode_the_layout_defines_rows_1_26_instead_of_columns_a_z_pl") }));
     const columns = YSCFormatter.excelColumns(profile.format);
-    const labels = { skip: t("leave_unchanged"), fullName: t("full_description"), supplier: t("supplier"), article: t("article_sku"), name: t("product_name"), unit: t("unit_with_dimensions"), plainUnit: t("unit_only"), price: t("price"), sheetLength: t("length_m"), sheetWidth: t("width_m"), sheetThickness: t("thickness_mm"), sheetSize: t("sheet_size_m"), url: t("current_page_url"), imageUrl: t("product_image_url"), imageFormula: t("image_image_url"), join: t("join_with_a_space") };
+    const labels = { skip: t("leave_unchanged"), fullName: t("full_description"), supplier: t("supplier"), article: t("article_sku"), name: t("product_name"), unit: t("unit_with_dimensions"), plainUnit: t("unit_only"), price: t("price"), currency: t("currency"), sheetLength: t("length_m"), sheetWidth: t("width_m"), sheetThickness: t("thickness_mm"), sheetSize: t("sheet_size_m"), url: t("current_page_url"), imageUrl: t("product_image_url"), imageFormula: t("image_image_url"), join: t("join_with_a_space") };
     const strip = $("div", { className: "ysc-excel-row" });
     // Literal text belongs to the selected style, independently for each cell.
     labels.anyText = t("any_text");
@@ -307,7 +307,7 @@
     if ((needs("article") || needs("fullName") && profile.format.article !== false) && !result.article) return t("article_not_found_configure_the_field");
     if ((needs("supplier") || needs("fullName") && profile.format.supplier !== false) && !result.supplier) return t("enter_the_supplier");
     if ((needs("unit") || needs("plainUnit")) && !result.unit) return t("fill_in_for_the_selected_column", { field: t("unit") });
-    if (needs("price") && !YSCFormatter.priceNumber(result.price)) return t("enter_a_valid_price_for_the_selected_column");
+    if (needs("price") && String(result.price || "").trim() && !YSCFormatter.priceNumber(result.price)) return t("enter_a_valid_price_for_the_selected_column");
     if ((needs("imageUrl") || needs("imageFormula")) && !result.imageUrl) return t("image_url_was_not_found_configure_the_field");
     for (const [key, title] of [["sheetLength", "length_m"], ["sheetWidth", "width_m"], ["sheetThickness", "thickness_mm"], ["sheetSize", "sheet_size_m"]]) {
       if (needs(key) && !YSCFormatter.excelValue(key, result, profile.format)) return t("fill_in_for_the_selected_column", { field: t(title) });
@@ -408,6 +408,9 @@
       for (const key of ["sheetLength", "sheetWidth", "sheetThickness"]) profile.fields[key] ||= { enabled: true, source: "auto", selector: "" };
       const parsed = YSCParser.parse(profile);
       result.sheetLength = parsed.sheetLength || ""; result.sheetWidth = parsed.sheetWidth || ""; result.sheetThickness = parsed.sheetThickness || "";
+      if (result.unitDefaulted || !result.unit && !result.confirmed?.unit) {
+        result.unit = parsed.unit; result.unitDefaulted = parsed.unitDefaulted;
+      }
       result.sheetConfirmed = false;
       nextExcelBlock = 0; render();
     };
@@ -515,7 +518,21 @@
   }
   function pickField(key) {
     panel.style.display = "none";
-    YSCPicker.start(key, selected => { profile.fields[key].source = "css"; profile.fields[key].selector = selected.selector; rerun(); });
+    YSCPicker.start(key, selected => {
+      profile.fields[key] = { ...profile.fields[key], enabled: true, source: "css", selector: selected.selector };
+      // A picker changes only the selected field, preserving all manual corrections.
+      const parsed = YSCParser.parse(profile);
+      result[key] = key === "price" ? YSCFormatter.priceNumber(YSCParser.removeBlocked(selected.price || selected.text || parsed.price, profile.blacklist)) : parsed[key] || "";
+      if (key === "price" && !result.confirmed?.currency) {
+        const currency = selected.currency || YSCFormatter.currencyCode(selected.text || selected.price);
+        if (currency) result.currency = currency;
+      }
+      result.candidates[key] = parsed.candidates[key] || [];
+      result.confirmed = { ...result.confirmed, [key]: true };
+      if (key === "unit") { result.sheetConfirmed = false; result.unitDefaulted = parsed.unitDefaulted; }
+      nextExcelBlock = 0; render();
+      if (!result[key]) panel.querySelector(`#ysc-value-${key}`)?.focus?.();
+    });
   }
   function pickImage() {
     panel.style.display = "none";
@@ -577,19 +594,28 @@
       imageStage.append(imageSwitch);
     }
     panel.append(imageStage);
-    const pricing = $("div", { className: "ysc-pricing" });
+    const pricing = $("div", { className: "ysc-pricing ysc-price-row" });
     const priceBox = $("div"), unitBox = $("div");
-    priceBox.append(...input(t("price"), result.price, v => { result.price = v; result.confirmed = { ...result.confirmed, price: true }; refreshPreview(); }));
-    unitBox.append(...input(t("unit_pcs_m_m"), result.unit, v => { result.unit = v; result.sheetConfirmed = false; result.confirmed = { ...result.confirmed, unit: true }; refreshPreview(); }));
+    priceBox.append(...input(t("price"), result.price, v => {
+      result.price = v; result.confirmed = { ...result.confirmed, price: true };
+      const currency = YSCFormatter.currencyCode(v);
+      if (currency && !result.confirmed.currency) { result.currency = currency; panel.querySelector("#ysc-value-currency").value = currency; }
+      refreshPreview();
+    }));
+    unitBox.append(...input(t("unit"), result.unit, v => { result.unit = v; result.unitDefaulted = false; result.sheetConfirmed = false; result.confirmed = { ...result.confirmed, unit: true }; refreshPreview(); }));
+    unitBox.querySelector("label").title = t("unit_pcs_m_m");
     inlinePicker(priceBox.querySelector("input"), "price", t("pick_price_on_page"));
     inlinePicker(unitBox.querySelector("input"), "unit", t("pick_unit"));
     currentSupplier.id = "ysc-value-supplier"; currentArticle.id = "ysc-value-article"; currentName.id = "ysc-value-name";
     priceBox.querySelector("input").id = "ysc-value-price"; unitBox.querySelector("input").id = "ysc-value-unit";
-    pricing.append(priceBox, unitBox); panel.append(pricing);
-    for (const [key, title] of [["price", t("price")], ["unit", t("unit")]]) {
-      if (result.candidates[key].length > 1) {
+    const currencyBox = $("div");
+    currencyBox.append(...input(t("currency"), result.currency, v => { result.currency = YSCFormatter.currencyCode(v) || v.trim().toUpperCase(); result.confirmed = { ...result.confirmed, currency: true }; refreshPreview(); }));
+    currencyBox.querySelector("input").id = "ysc-value-currency";
+    pricing.append(priceBox, unitBox, currencyBox); panel.append(pricing);
+    for (const [key, title] of [["price", t("price")], ["unit", t("unit")], ["currency", t("currency")]]) {
+      if (result.candidates[key]?.length > 1) {
         const choices = $("select", { id: `ysc-choice-${key}` }); choices.append($("option", { textContent: t("choose_the_correct_value"), value: "", disabled: true, selected: !result.candidates[key].includes(result[key]) })); result.candidates[key].forEach(v => choices.append($("option", { textContent: v, value: v, selected: v === result[key] })));
-        choices.onchange = () => { result[key] = choices.value; if (key === "unit") result.sheetConfirmed = false; result.confirmed = { ...result.confirmed, [key]: true }; (key === "price" ? priceBox : unitBox).querySelector("input").value = choices.value; refreshPreview(); };
+        choices.onchange = () => { result[key] = choices.value; if (key === "unit") { result.sheetConfirmed = false; result.unitDefaulted = false; } result.confirmed = { ...result.confirmed, [key]: true }; (key === "price" ? priceBox : key === "currency" ? currencyBox : unitBox).querySelector("input").value = choices.value; refreshPreview(); };
         panel.append($("label", { textContent: t("multiple_values_please_check", { title: t(title) }) }), choices);
       }
     }
@@ -598,7 +624,7 @@
     const imageSettingsBox = imageSettings();
     panel.append(styleSettings());
     if (result.candidates.article.length > 1) { const choices = $("select"); result.candidates.article.forEach(v => choices.append($("option", { textContent:v, value:v }))); choices.onchange = () => { result.article = choices.value; currentArticle.value = choices.value; refreshPreview(); }; panel.append($("label", { textContent:t("multiple_articles_choose_the_correct_one") }), choices); }
-    const rulesBox = folded("rules", t("advanced_extraction_rules"), [fieldEditor("article", t("article_sku")), fieldEditor("name", t("product_name")), fieldEditor("price", t("price")), fieldEditor("unit", t("unit_of_measure")), fieldEditor("imageUrl", t("product_image_url"))]);
+    const rulesBox = folded("rules", t("advanced_extraction_rules"), [fieldEditor("article", t("article_sku")), fieldEditor("name", t("product_name")), fieldEditor("price", t("price")), fieldEditor("currency", t("currency")), fieldEditor("unit", t("unit_of_measure")), fieldEditor("imageUrl", t("product_image_url"))]);
     panel.append(rulesBox);
     if (profile.format.sheet) {
       panel.querySelector("#ysc-rules").append(fieldEditor("sheetLength", profile.format.sheetRod ? t("bar_rod_length_2") : t("sheet_length")));

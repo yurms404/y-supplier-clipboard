@@ -7,6 +7,26 @@ assert.equal(formatter.format({ supplier: "VIYAR", article: "190218", name: "Г�
 assert.equal(formatter.format({ supplier: "VIYAR", article: "190218", name: "Гвинт", unit: "шт", price: "1.02" }, { excel: true, supplier: false }), "190218 Гвинт\tшт\t1,02");
 assert.equal(formatter.format({ supplier: "SIRIUS", article: "6200", name: "Ручка, чорна", unit: "шт", price: "192" }), "SIRIUS 6200 Ручка- чорна");
 assert.equal(formatter.priceNumber("1 234,50 грн/м²"), "1234.50");
+assert.equal(formatter.priceNumber("€9.59"), "9.59");
+assert.equal(formatter.priceNumber("EUR 9,59"), "9.59");
+for (const currency of ["євро", "евро", "euro", "euros"]) assert.equal(formatter.priceNumber(`12,24 ${currency}`), "12.24");
+assert.equal(formatter.priceNumber("12,24 євро 9,87 євро"), "");
+assert.equal(formatter.priceNumber("€9.59 €12.00"), "");
+for (const [value, code] of [["€12.24", "EUR"], ["12,24 євро", "EUR"], ["192 грн", "UAH"], ["USD 9.59", "USD"], ["£10.00", "GBP"], ["10 zł", "PLN"]]) {
+  assert.equal(formatter.currencyCode(value), code);
+  assert.ok(formatter.priceNumber(value), "The price remains numeric");
+}
+assert.equal(formatter.currencyCode("$10.00"), "", "A dollar symbol alone is ambiguous");
+assert.equal(formatter.currencyCode("EUR 10 USD 12"), "");
+for (const code of ["PLN", "CZK", "SEK", "NOK", "DKK", "ISK"]) {
+  assert.equal(formatter.currencyCode(`${code} 12,24`), code);
+  assert.equal(formatter.priceNumber(`12,24 ${code}`), "12.24");
+}
+assert.equal(formatter.currencyCode("12,24 Kč"), "CZK");
+assert.equal(formatter.priceNumber("12,24 Kč"), "12.24");
+assert.equal(formatter.priceNumber("12,24 kr"), "12.24");
+assert.equal(formatter.currencyCode("12,24 kr"), "", "The country of an ambiguous crown symbol must not be guessed");
+assert.equal(formatter.excelBlocks({ price: "12.24", currency: "EUR" }, { excelColumns: ["price", "currency"] })[0].text, "12,24\tEUR");
 assert.equal(formatter.priceNumber("100–200 грн"), "");
 assert.equal(formatter.priceNumber("192 грн 240 грн"), "");
 assert.equal(formatter.formatExcel({ name: "=SUM(A1:A3)\nТовар", unit: "шт", price: "0" }), "'=SUM(A1:A3) Товар\tшт\t0");

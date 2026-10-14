@@ -5,12 +5,17 @@ globalThis.YSCProfiles = (() => {
     try { const url = new URL(value); return /^https?:$/.test(url.protocol) && url.hostname === domain && !url.username && !url.password ? url.href : ""; }
     catch (_) { return ""; }
   }
-  const base = domain => ({ schemaVersion: VERSION, id: crypto.randomUUID(), domain, enabled: true, supplier: domain.split(".")[0].toUpperCase(), urlPattern: "", fields: { article: { enabled: true, source: "auto", selector: "", regex: "", attribute: "", value: "" }, name: { enabled: true, source: "auto", selector: "", regex: "", attribute: "", value: "" } }, format: {} });
+  const defaultSupplier = domain => {
+    const parts = String(domain || "").split(".").filter(Boolean);
+    return (parts[0]?.toLowerCase() === "www" ? parts[1] : parts[0] || "").toUpperCase();
+  };
+  const base = domain => ({ schemaVersion: VERSION, id: crypto.randomUUID(), domain, enabled: true, supplier: defaultSupplier(domain), urlPattern: "", fields: { article: { enabled: true, source: "auto", selector: "", regex: "", attribute: "", value: "" }, name: { enabled: true, source: "auto", selector: "", regex: "", attribute: "", value: "" } }, format: {} });
   function normalize(profile) {
     const defaults = base(profile.domain || "");
-    const fields = { ...defaults.fields, price: { enabled: true, source: "auto" }, unit: { enabled: true, source: "auto" }, imageUrl: { enabled: true, source: "auto" }, sheetLength: { enabled: true, source: "auto" }, sheetWidth: { enabled: true, source: "auto" }, sheetThickness: { enabled: true, source: "auto" } };
+    const fields = { ...defaults.fields, price: { enabled: true, source: "auto" }, currency: { enabled: true, source: "auto" }, unit: { enabled: true, source: "auto" }, imageUrl: { enabled: true, source: "auto" }, sheetLength: { enabled: true, source: "auto" }, sheetWidth: { enabled: true, source: "auto" }, sheetThickness: { enabled: true, source: "auto" } };
     for (const key of Object.keys(fields)) fields[key] = { selector: "", regex: "", attribute: "", value: "", ...fields[key], ...profile.fields?.[key] };
-    return { ...defaults, ...profile, lastUrl: pageUrl(profile.lastUrl, defaults.domain), blacklist: Array.isArray(profile.blacklist) ? profile.blacklist.filter(v => typeof v === "string").slice(0, 100) : [], fields, format: { excel: false, ...profile.format } };
+    const supplier = String(profile.supplier || "").trim().toLowerCase() === "www" ? defaults.supplier : profile.supplier;
+    return { ...defaults, ...profile, supplier, lastUrl: pageUrl(profile.lastUrl, defaults.domain), blacklist: Array.isArray(profile.blacklist) ? profile.blacklist.filter(v => typeof v === "string").slice(0, 100) : [], fields, format: { excel: false, ...profile.format } };
   }
   const all = async () => ((await chrome.storage.local.get(KEY))[KEY] || []).map(normalize);
   let writes = Promise.resolve();

@@ -32,7 +32,7 @@ globalThis.YSCPicker = (() => {
     const attribute = ["src", "data-src", "data-lazy-src", "data-original"].find(name => image.getAttribute(name));
     return { imageSelector: selectorFor(image), imageAttribute: attribute || "src", imageUrl: image.currentSrc || image.getAttribute(attribute || "src") || "" };
   }
-  function click(e) { if (!active || e.target.closest("#ysc-panel")) return; e.preventDefault(); e.stopImmediatePropagation(); const selected = { selector: selectorFor(e.target), text: YSCParser.text(e.target), ...imageData(e.target) }; stop(); onPick?.(selected); }
+  function click(e) { if (!active || e.target.closest("#ysc-panel")) return; e.preventDefault(); e.stopImmediatePropagation(); const selected = { selector: selectorFor(e.target), text: YSCParser.text(e.target), ...(target === "price" ? { price: YSCParser.priceText(e.target), currency: YSCParser.priceCurrency(e.target) } : {}), ...imageData(e.target) }; stop(); onPick?.(selected); }
   function start(field, callback) { active = true; target = field; onPick = callback; document.documentElement.append(outline); document.addEventListener("mousemove", move, true); document.addEventListener("click", click, true); }
   function stop() { active = false; outline.remove(); document.removeEventListener("mousemove", move, true); document.removeEventListener("click", click, true); }
   return { start, stop };

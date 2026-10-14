@@ -19,6 +19,9 @@ assert.equal(parser.removeBlocked("40030", ["40030"]), "");
 assert.equal(parser.removeBlocked("Код товара: 40030", []), "Код товара: 40030");
 (async () => {
   const profiles = context.YSCProfiles;
+  assert.equal(profiles.base("www.eamf.ee").supplier, "EAMF");
+  const normalizedWww = profiles.validate([{ id: "eamf", domain: "www.eamf.ee", supplier: "WWW" }])[0];
+  assert.equal(normalizedWww.supplier, "EAMF");
   const profile = await profiles.get();
   await profiles.saveBlacklist(profile, ["Код товара:"]);
   const reopened = await profiles.get();

@@ -18,13 +18,25 @@
 #ysc-panel .ysc-heading img { width:24px; height:24px; flex-shrink:0; object-fit:contain; }
 #ysc-panel .ysc-quick-result { display:grid; grid-template-columns:minmax(0,1fr) 30px; align-items:start; gap:5px; }
 #ysc-panel #ysc-quick-preview { background:var(--ysc-preview); color:var(--ysc-text); padding:9px; border-radius:6px; overflow-wrap:anywhere; }
-#ysc-panel #ysc-quick-copy { margin:0; padding:6px 0; background:transparent; color:var(--ysc-accent); border:1px solid var(--ysc-accent); font-size:19px; }
 #ysc-panel .ysc-style-select { display:grid; grid-template-columns:minmax(0,1fr) 30px; gap:5px; align-items:center; }
 #ysc-panel .ysc-style-actions { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:6px; }
 #ysc-panel .ysc-style-actions button { margin:0; padding:8px 4px; }
 #ysc-panel .ysc-style-transfer { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin-top:6px; }
 #ysc-panel .ysc-style-transfer button { margin:0; padding:8px 4px; }
-#ysc-panel #ysc-style-edit { margin:0; padding:5px; background:transparent; color:var(--ysc-accent); border:1px solid var(--ysc-accent); }
+#ysc-panel #ysc-quick-copy, #ysc-panel #ysc-style-edit {
+  all:unset;
+  box-sizing:border-box; cursor:pointer;
+  position:static !important; inset:auto !important; transform:none !important; float:none !important;
+  display:grid !important; place-items:center;
+  width:30px !important; min-width:30px !important; max-width:30px !important;
+  height:36px !important; min-height:36px !important; max-height:36px !important;
+  margin:0 !important; padding:0 !important; text-indent:0 !important;
+  background:transparent; color:var(--ysc-accent); border:1px solid var(--ysc-accent); border-radius:6px;
+  font:19px/1 system-ui,sans-serif; text-align:center; overflow:hidden;
+}
+#ysc-panel #ysc-quick-copy::before, #ysc-panel #ysc-quick-copy::after,
+#ysc-panel #ysc-style-edit::before, #ysc-panel #ysc-style-edit::after { content:none; }
+#ysc-panel #ysc-quick-copy:focus-visible, #ysc-panel #ysc-style-edit:focus-visible { outline:2px solid var(--ysc-accent); outline-offset:1px; }
 #ysc-panel select option { background:var(--ysc-surface); color:var(--ysc-control-text); }
 #ysc-panel h3 { font-size:14px; margin:10px 0 4px; }
 #ysc-panel label { display:block; margin:7px 0 3px; font-weight:400; color:var(--ysc-text); }
@@ -59,6 +71,7 @@
 #ysc-panel summary { cursor:pointer; font-weight:600; padding:3px 0; }
 #ysc-panel .ysc-rule + .ysc-rule { border-top:1px solid var(--ysc-border); margin-top:12px; }
 #ysc-panel .ysc-pricing { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+#ysc-panel .ysc-price-row { grid-template-columns:minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,.7fr); align-items:end; }
 #ysc-panel .ysc-data-divider { border:0; border-top:1px solid var(--ysc-border); margin:10px 0 8px; }
 #ysc-panel .ysc-image-switch { position:relative; display:flex; align-items:center; justify-content:center; gap:10px; margin:8px 0; padding:5px 38px 5px 9px; border:1px solid var(--ysc-accent); border-radius:5px; color:var(--ysc-accent); font-size:12px; }
 #ysc-panel .ysc-image-switch .ysc-image-nav,#ysc-panel .ysc-image-switch #ysc-image-choice,#ysc-panel .ysc-image-pick { color:var(--ysc-accent); }
@@ -68,17 +81,20 @@
 #ysc-panel .ysc-pricing > div { min-width:0; display:flex; flex-direction:column; }
 #ysc-panel .ysc-sheet-meta { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; align-items:end; }
 #ysc-panel .ysc-sheet-meta label { font-size:12px; }
-#ysc-panel .ysc-field-picker { position:relative; min-width:0; }
+#ysc-panel .ysc-field-picker { position:relative; display:block; width:100%; min-width:0; padding:0; margin:0; }
 #ysc-panel .ysc-field-picker input { padding-right:36px; min-width:0; }
 #ysc-panel .ysc-field-picker .ysc-pick-icon {
-  position:absolute; right:4px; top:50%; transform:translateY(-50%);
-  width:26px; height:26px; padding:0; margin:0; border-radius:4px;
+  all:unset;
+  box-sizing:border-box; cursor:pointer;
+  position:absolute !important; left:auto !important; right:4px !important; top:50% !important; bottom:auto !important; transform:translateY(-50%) !important;
+  width:26px !important; min-width:0 !important; max-width:26px !important; height:26px !important; min-height:0 !important; max-height:26px !important; padding:0 !important; margin:0 !important; border:0; border-radius:4px;
   display:grid; place-items:center; background:transparent; color:var(--ysc-accent);
   font-size:21px; font-weight:700; line-height:1;
 }
 #ysc-panel .ysc-pick-icon:hover { background:color-mix(in srgb, var(--ysc-accent) 10%, transparent); }
 #ysc-panel .ysc-pick-icon:focus-visible { outline:2px solid var(--ysc-accent); outline-offset:1px; }
 #ysc-panel .ysc-cursor-icon {
+  all:unset;
   display:block; width:12px; height:14px; background:var(--ysc-accent); color:var(--ysc-accent); pointer-events:none;
   clip-path:polygon(8% 0, 8% 81%, 34% 60%, 55% 100%, 77% 90%, 56% 50%, 94% 50%);
 }

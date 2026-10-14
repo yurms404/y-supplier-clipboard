@@ -31,24 +31,56 @@ globalThis.YSCParser = (() => {
     return [...document.querySelectorAll('[itemprop="price"], meta[property="product:price:amount"], [data-price], [class*="price" i]')]
       .filter(el => !el.closest?.('#ysc-panel, [data-ysc-notice], del, s, [class*="old" i], [class*="price-old" i]'));
   }
-  function priceText(el) { return el.getAttribute?.("content") || el.getAttribute?.("data-price") || text(el); }
+  function priceText(el) {
+    if (!el) return "";
+    const read = node => ["content", "data-price", "data-price-amount", "aria-label", "value"].map(attr => node.getAttribute?.(attr)).concat(node.value, text(node));
+    const valid = values => values.find(value => YSCFormatter.priceNumber(value)) || "";
+    let value = valid(read(el));
+    if (value) return value;
+    // Clicking a price wrapper must also work when its value is in a child attribute.
+    const children = [...(el.querySelectorAll?.('[itemprop="price"], [data-price], [data-price-amount], [content], [aria-label], input') || [])];
+    const prices = [...new Set(children.map(node => YSCFormatter.priceNumber(valid(read(node)))).filter(Boolean))];
+    if (prices.length === 1) return prices[0];
+    if (typeof getComputedStyle === "function") {
+      try {
+        value = valid(["::before", "::after"].map(pseudo => getComputedStyle(el, pseudo).content.replace(/^["']|["']$/g, "")));
+      } catch (_) { /* Some documents do not expose computed pseudo-element styles. */ }
+    }
+    return value || "";
+  }
+  function priceCurrency(el) {
+    if (!el) return "";
+    const code = YSCFormatter.currencyCode;
+    const values = [el.getAttribute?.("data-currency"), el.getAttribute?.("data-price-currency"), el.getAttribute?.("aria-label"), text(el)];
+    for (const node of el.querySelectorAll?.('[itemprop="priceCurrency"], [data-currency], [data-price-currency]') || []) values.push(node.getAttribute?.("content"), node.getAttribute?.("data-currency"), node.getAttribute?.("data-price-currency"), text(node));
+    return code(values.filter(Boolean).join(" "));
+  }
   function unitFromPrice(value) { return String(value || "").match(/(?:грн\.?|₴|UAH)\s*\/\s*([\p{L}\d²³.\-–—−]+(?:\s*м)?)/iu)?.[1] || ""; }
   function sourceValue(rule, field, data) {
     if (!rule || !rule.enabled) return "";
     if (rule.source === "manual" || rule.source === "fixed") return field === "imageUrl" ? imageUrl(rule.value) : rule.value || "";
     if (rule.source === "url") { const value = new URL(location.href).searchParams.get(rule.value || rule.attribute || "") || ""; return field === "imageUrl" ? imageUrl(value) : value; }
+    if (rule.source === "css" && field === "price") return priceText(safeQuery(rule.selector));
     if (rule.source === "css" || rule.source === "attribute") { const el = safeQuery(rule.selector); const value = rule.source === "attribute" ? el?.getAttribute(rule.attribute || "") || "" : field.startsWith("sheet") && /^(SELECT|INPUT)$/i.test(el?.tagName || "") ? text(el.selectedOptions?.[0]) || el.value || "" : text(el); return field === "imageUrl" ? imageUrl(value) : field === "article" ? cleanArticle(value) : field === "unit" ? unitFromPrice(value) || value : value; }
     if (rule.source === "regex") { try { const value = (document.body.innerText.match(new RegExp(rule.regex, "im")) || [])[1] || ""; return field === "imageUrl" ? imageUrl(value) : value; } catch (_) { return ""; } }
     if (rule.source === "jsonld") {
       if (field === "imageUrl") return imageUrl(Array.isArray(data.image) ? data.image[0] : data.image);
       if (["sheetLength", "sheetWidth", "sheetThickness"].includes(field)) return dimensionMetadata(data, field)[0] || "";
       if (field === "price") return String(offers([data])[0]?.price ?? "");
+      if (field === "currency") return offers([data])[0]?.priceCurrency || offers([data])[0]?.priceSpecification?.priceCurrency || "";
       if (field === "unit") return offerUnit(offers([data])[0]);
       return String(data[field === "name" ? "name" : "sku"] || "");
     }
     return "";
   }
   function candidates(field, blacklist = []) {
+    if (field === "currency") {
+      const metadata = [
+        ...offers(jsonLd()).map(o => o.priceCurrency || o.priceSpecification?.priceCurrency),
+        ...[...document.querySelectorAll('[itemprop="priceCurrency"], meta[property="product:price:currency"]')].map(el => el.getAttribute?.("content") || text(el))
+      ].map(YSCFormatter.currencyCode).filter(Boolean);
+      return [...new Set(metadata.length ? metadata : priceNodes().map(priceCurrency).filter(Boolean))];
+    }
     if (field === "imageUrl") {
       const values = jsonLd().flatMap(product => Array.isArray(product.image) ? product.image : [product.image]).map(imageUrl);
       // JSON-LD represents the product gallery. Social metadata is only a fallback,
@@ -103,10 +135,16 @@ globalThis.YSCParser = (() => {
     const nameValues = cleanValues(fields.name?.source === "auto" || !fields.name ? candidates("name") : [sourceValue(fields.name, "name", product)].filter(Boolean));
     const valuesFor = key => cleanValues(fields[key]?.source === "auto" || !fields[key] ? candidates(key, profile.blacklist) : [sourceValue(fields[key], key, product)].filter(Boolean));
     const priceValues = valuesFor("price").map(YSCFormatter.priceNumber).filter(Boolean), unitValues = valuesFor("unit"), imageValues = valuesFor("imageUrl");
-    const supplier = removeBlocked(profile.supplier || sourceValue(fields.supplier, "supplier", product) || location.hostname.split(".").slice(-2, -1)[0], profile.blacklist);
+    const currencyValues = valuesFor("currency").map(YSCFormatter.currencyCode).filter(Boolean);
+    const unitDefaulted = !unitValues.length && !profile.format?.sheet && fields.unit?.enabled !== false;
+    const unit = unitValues[0] || (unitDefaulted ? "шт." : "");
+    const hostnameParts = location.hostname.split(".");
+    const hostnameSupplier = hostnameParts[0]?.toLowerCase() === "www" ? hostnameParts[1] : hostnameParts[0];
+    const configuredSupplier = /^www$/i.test(String(profile.supplier || "").trim()) ? "" : profile.supplier;
+    const supplier = removeBlocked(configuredSupplier || sourceValue(fields.supplier, "supplier", product) || hostnameSupplier, profile.blacklist);
     const sheetLength = profile.format?.sheet ? valuesFor("sheetLength") : [], sheetWidth = profile.format?.sheet ? valuesFor("sheetWidth") : [];
     const sheetThickness = profile.format?.sheet ? [...new Set(valuesFor("sheetThickness").map(YSCFormatter.thicknessMm).filter(Boolean))] : [];
-    return { supplier, article: articleValues[0] || "", name: nameValues[0] || "", price: priceValues[0] || "", unit: unitValues[0] || "", imageUrl: imageValues[0] || "", sheetLength: sheetLength[0] || "", sheetWidth: sheetWidth[0] || "", sheetThickness: sheetThickness[0] || "", candidates: { article: articleValues, name: nameValues, price: priceValues, unit: unitValues, imageUrl: imageValues, sheetLength, sheetWidth, sheetThickness }, productDetected: Boolean(product.name || text(document.querySelector("h1"))) };
+    return { supplier, article: articleValues[0] || "", name: nameValues[0] || "", price: priceValues[0] || "", currency: currencyValues.length === 1 ? currencyValues[0] : "", unit, unitDefaulted, imageUrl: imageValues[0] || "", sheetLength: sheetLength[0] || "", sheetWidth: sheetWidth[0] || "", sheetThickness: sheetThickness[0] || "", candidates: { article: articleValues, name: nameValues, price: priceValues, currency: currencyValues, unit: unitValues, imageUrl: imageValues, sheetLength, sheetWidth, sheetThickness }, productDetected: Boolean(product.name || text(document.querySelector("h1"))) };
   }
-  return { parse, candidates, safeQuery, text, cleanArticle, removeBlocked, imageUrl };
+  return { parse, candidates, safeQuery, text, cleanArticle, removeBlocked, imageUrl, priceText, priceCurrency };
 })();

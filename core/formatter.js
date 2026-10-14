@@ -19,9 +19,22 @@ globalThis.YSCFormatter = (() => {
     return parts.filter(Boolean).join(" ");
   }
   function priceNumber(value) {
-    const raw = String(value ?? "").trim().replace(/\s*(?:грн\.?|₴|UAH|USD|EUR|[$€])(?:\s*\/\s*[\p{L}\d²³. \-–—−]+)?$/iu, "").replace(/[\s\u00a0\u202f]/g, "");
+    const currency = "(?:грн\\.?|₴|UAH|USD|EUR|GBP|PLN|CZK|CHF|CAD|AUD|SEK|NOK|DKK|ISK|JPY|CNY|euros?|євро|евро|US\\s*\\$|zł|Kč|kr\\.?|[$€£])";
+    const raw = String(value ?? "").trim().replace(new RegExp(`^${currency}\\s*`, "iu"), "").replace(new RegExp(`\\s*${currency}(?:\\s*\\/\\s*[\\p{L}\\d²³. \\-–—−]+)?$`, "iu"), "").replace(/[\s\u00a0\u202f]/g, "");
     if (!/^\d+(?:[.,]\d{1,2})?$/.test(raw)) return "";
     return raw.replace(",", ".");
+  }
+  function currencyCode(value) {
+    const raw = String(value ?? "").trim();
+    const codes = raw.toUpperCase().match(/\b(?:EUR|UAH|USD|GBP|PLN|CZK|CHF|CAD|AUD|SEK|NOK|DKK|ISK|JPY|CNY)\b/g) || [];
+    if (/€|(?:^|[^\p{L}])(?:euros?|євро|евро)(?=$|[^\p{L}])/iu.test(raw)) codes.push("EUR");
+    if (/₴|(?:^|[^\p{L}])грн\.?(?=$|[^\p{L}])/iu.test(raw)) codes.push("UAH");
+    if (/£/.test(raw)) codes.push("GBP");
+    if (/US\s*\$/i.test(raw)) codes.push("USD");
+    if (/(?:^|[^\p{L}])zł(?=$|[^\p{L}])/iu.test(raw)) codes.push("PLN");
+    if (/(?:^|[^\p{L}])Kč(?=$|[^\p{L}])/iu.test(raw)) codes.push("CZK");
+    const distinct = [...new Set(codes)];
+    return distinct.length === 1 ? distinct[0] : "";
   }
   function formatExcel(fields, options = {}) {
     // Nonadjacent destinations remain separate sessions, never padded with empty cells.
@@ -60,7 +73,7 @@ globalThis.YSCFormatter = (() => {
   }
   const excelLayout = { name: 2, unit: 5, price: 6 };
   const columnName = column => String.fromCharCode(64 + column);
-  const excelFields = ["fullName", "supplier", "article", "name", "unit", "plainUnit", "price", "sheetLength", "sheetWidth", "sheetThickness", "sheetSize", "url", "imageUrl", "imageFormula"];
+  const excelFields = ["fullName", "supplier", "article", "name", "unit", "plainUnit", "price", "currency", "sheetLength", "sheetWidth", "sheetThickness", "sheetSize", "url", "imageUrl", "imageFormula"];
   const excelJoin = "join";
   const isLiteralColumn = key => Boolean(key && typeof key === "object" && !Array.isArray(key) && typeof key.text === "string");
   function excelColumns(options = {}) {
@@ -88,6 +101,7 @@ globalThis.YSCFormatter = (() => {
       article: () => clean(fields.article, formatting), name: () => clean(fields.name, formatting),
       unit: () => sheetUnit(fields, options), plainUnit: () => fields.unit,
       price: () => priceNumber(fields.price).replace(".", ","), url: () => fields.url,
+      currency: () => fields.currency,
       imageUrl: () => options.excelImageFormula ? imageFormula : fields.imageUrl,
       imageFormula: () => imageFormula,
       sheetLength: () => dimensionMetres(fields.sheetLength, options.sheetInputUnit || "mm"),
@@ -135,5 +149,5 @@ globalThis.YSCFormatter = (() => {
     const separator = separatorMode === "enter" ? "\r\n" : separatorMode === "space" ? " " : separatorMode === "ascii" && Number.isInteger(ascii) && ascii >= 1 && ascii <= 127 ? String.fromCharCode(ascii) : "\t";
     return groups.map(g => ({ ...g, target: g.values.length === 1 ? (vertical ? String(g.start) : columnName(g.start)) : (vertical ? `${g.start}:${g.end}` : `${columnName(g.start)}:${columnName(g.end)}`), text: g.values.join(separator) }));
   }
-  return { clean, format, formatExcel, priceNumber, defaults, excelLayout, excelColumns, excelFields, excelValue, excelBlocks, columnName, dimensionMetres, sheetSize, sheetUnit, thicknessMm, isLiteralColumn };
+  return { clean, format, formatExcel, priceNumber, currencyCode, defaults, excelLayout, excelColumns, excelFields, excelValue, excelBlocks, columnName, dimensionMetres, sheetSize, sheetUnit, thicknessMm, isLiteralColumn };
 })();

@@ -40,7 +40,7 @@ const context = {
     removeDomain: async domain => { deletedDomains.push(domain); domainProfiles = domainProfiles.filter(p => p.domain !== domain); }
   },
   YSCParser: { parse: () => structuredClone(product), removeBlocked: value => value },
-  YSCPicker: { stop() {}, start(key) { picked.push(key); } },
+  YSCPicker: { stop() {}, start(key, callback) { picked.push(key); this.callback = callback; } },
   chrome: {
     storage: { local: { get: async () => ({ ...stored }), set: async value => Object.assign(stored, value) } },
     runtime: { getManifest: () => JSON.parse(fs.readFileSync("manifest.json", "utf8")), getURL: path => `chrome-extension://test/${path}`, sendMessage: async message => { if (message.type === "YSC_SAVE_STYLE") exportedStyles.push(message); else copied.push(message.text); return { ok: true }; }, onMessage: { addListener: callback => { listener = callback; } } }
@@ -237,7 +237,7 @@ const copied = [];
   panel = root.querySelector("#ysc-panel");
   assert.equal(panel.querySelector(".ysc-excel-row").querySelectorAll("select").length, 26);
   assert.equal(panel.querySelectorAll(".ysc-excel-mapping").length, 0, "Old field-to-column controls are removed");
-  const expectedOptions = ["skip", "fullName", "supplier", "article", "name", "unit", "plainUnit", "price", "sheetLength", "sheetWidth", "sheetThickness", "sheetSize", "url", "imageUrl", "imageFormula", "join", "anyText"];
+  const expectedOptions = ["skip", "fullName", "supplier", "article", "name", "unit", "plainUnit", "price", "currency", "sheetLength", "sheetWidth", "sheetThickness", "sheetSize", "url", "imageUrl", "imageFormula", "join", "anyText"];
   assert.deepEqual(panel.querySelector("#ysc-excel-column-A").children.map(option => option.value), expectedOptions);
   panel.querySelector(".ysc-excel-row").scrollLeft = 1200;
   panel.querySelector("#ysc-settings").open = true; panel.querySelector("#ysc-style-settings").hidden = false;
@@ -464,4 +464,58 @@ const copied = [];
   assert.ok(root.querySelector("#ysc-panel"), "Quick copy leaves style editing available");
   assert.equal(context.YSCWorkStyles.uniqueName("Excel", [{ id: "1", name: "Excel" }, { id: "2", name: "Excel (2)" }]), "Excel (3)");
   console.log("Work styles: migration, isolated schemas, duplication, rename, create, delete, reopening and quick copy passed");
+  profile.format.sheet = false;
+  Object.assign(stored.ysc_work_styles.find(s => s.id === stored.ysc_work_style).format, { excel: true, excelColumns: ["name", "price"], sheet: false, excelSeparator: "tab" });
+  product.price = ""; product.candidates.price = [];
+  panel.remove(); listener({ type: "YSC_CONFIGURE" }); await settle();
+  panel = root.querySelector("#ysc-panel");
+  const manualName = panel.querySelector("#ysc-value-name"); manualName.value = "Manual product"; manualName.listeners.input();
+  const beforeEmptyPrice = copied.length;
+  await panel.querySelector("#ysc-copy").onclick();
+  assert.equal(copied.length, beforeEmptyPrice + 1, "A missing price does not block copying");
+  assert.equal(copied.at(-1), "Manual product\t", "The price destination is left empty, not filled with zero");
+  listener({ type: "YSC_CONFIGURE" }); await settle(); panel = root.querySelector("#ysc-panel");
+  const nameBeforePick = panel.querySelector("#ysc-value-name"); nameBeforePick.value = "Corrected name"; nameBeforePick.listeners.input();
+  panel.querySelector("#ysc-pick-price").onclick();
+  product.price = "9.59"; product.candidates.price = ["9.59"];
+  context.YSCPicker.callback({ selector: ".chosen-price", price: "12,24 євро", text: "12,24 євро" });
+  panel = root.querySelector("#ysc-panel");
+  assert.equal(panel.querySelector("#ysc-value-name").value, "Corrected name", "Picking a price preserves manual corrections");
+  assert.equal(panel.querySelector("#ysc-value-price").value, "12.24", "The clicked price takes precedence over another value returned by the selector");
+  const manualPrice = panel.querySelector("#ysc-value-price"); manualPrice.value = "12,34"; manualPrice.listeners.input();
+  await panel.querySelector("#ysc-copy").onclick();
+  assert.equal(copied.at(-1), "Corrected name\t12,34", "Manual price takes precedence over site data");
+  console.log("Empty price export, picker preservation and manual price override passed");
+  Object.assign(stored.ysc_work_styles.find(s => s.id === stored.ysc_work_style).format, { excelColumns: ["name", "plainUnit"] });
+  Object.assign(product, { unit: "шт.", unitDefaulted: true }); product.candidates.unit = [];
+  listener({ type: "YSC_CONFIGURE" }); await settle(); panel = root.querySelector("#ysc-panel");
+  assert.equal(panel.querySelector("#ysc-value-unit").value, "шт.");
+  await panel.querySelector("#ysc-copy").onclick();
+  assert.ok(copied.at(-1).endsWith("\tшт."), "The default unit is exported");
+  listener({ type: "YSC_CONFIGURE" }); await settle(); panel = root.querySelector("#ysc-panel");
+  const manualUnit = panel.querySelector("#ysc-value-unit"); manualUnit.value = "комплект"; manualUnit.listeners.input();
+  const unitSheetToggle = panel.querySelector("#ysc-sheet-enabled"); unitSheetToggle.checked = true; unitSheetToggle.onchange();
+  assert.equal(root.querySelector("#ysc-value-unit").value, "комплект", "Mode switching preserves the user's unit");
+  const piecesToggle = root.querySelector("#ysc-sheet-enabled"); piecesToggle.checked = false; piecesToggle.onchange();
+  await root.querySelector("#ysc-copy").onclick();
+  assert.ok(copied.at(-1).endsWith("\tкомплект"), "The manual unit overrides the pieces default");
+  console.log("Pieces default and manual unit export passed");
+  Object.assign(stored.ysc_work_styles.find(s => s.id === stored.ysc_work_style).format, { excelColumns: ["price", "currency"] });
+  Object.assign(product, { price: "12.24", currency: "EUR" }); product.candidates.currency = ["EUR"];
+  listener({ type: "YSC_CONFIGURE" }); await settle(); panel = root.querySelector("#ysc-panel");
+  assert.equal(panel.querySelector("#ysc-value-currency").value, "EUR");
+  const manualCurrency = panel.querySelector("#ysc-value-currency"); manualCurrency.value = "PLN"; manualCurrency.listeners.input();
+  panel.querySelector("#ysc-pick-price").onclick(); context.YSCPicker.callback({ selector: ".eur-price", price: "12.24", currency: "EUR", text: "€12.24" });
+  panel = root.querySelector("#ysc-panel");
+  assert.equal(panel.querySelector("#ysc-value-currency").value, "PLN", "Manual currency survives price picking");
+  await panel.querySelector("#ysc-copy").onclick();
+  assert.equal(copied.at(-1), "12,24\tPLN");
+  product.currency = ""; product.candidates.currency = [];
+  listener({ type: "YSC_CONFIGURE" }); await settle();
+  await root.querySelector("#ysc-copy").onclick();
+  assert.equal(copied.at(-1), "12,24\t", "An unknown currency does not block numeric price export");
+  const currencyStyle = stored.ysc_work_styles.find(s => s.id === stored.ysc_work_style);
+  const roundTrip = context.YSCWorkStyles.importStyle(context.YSCWorkStyles.exportStyle(currencyStyle));
+  assert.equal(roundTrip.format.excelColumns[1], "currency", "Currency columns survive style export/import");
+  console.log("Currency display, manual override, optional export and style transfer passed");
 })().catch(error => { console.error(error); process.exitCode = 1; });
