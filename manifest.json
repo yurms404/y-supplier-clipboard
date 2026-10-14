@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Y Supplier Clipboard",
-  "version": "1.5.1",
+  "version": "2.0.0",
   "default_locale": "en",
   "description": "__MSG_extensionDescription__",
-  "permissions": ["storage", "activeTab", "scripting", "offscreen", "clipboardWrite"],
+  "permissions": ["storage", "activeTab", "scripting", "offscreen", "clipboardWrite", "downloads"],
   "background": { "service_worker": "background.js" },
   "commands": {
     "copy-product": {
@@ -19,7 +19,7 @@
   },
   "content_scripts": [{
     "matches": ["http://*/*", "https://*/*"],
-    "js": ["ui/i18n.js", "core/formatter.js", "core/parser.js", "storage/profiles.js", "ui/element-picker.js", "content.js"],
+    "js": ["ui/i18n.js", "core/formatter.js", "core/parser.js", "storage/profiles.js", "storage/work-styles.js", "ui/element-picker.js", "content.js"],
     "css": ["ui/configurator.css"],
     "run_at": "document_idle"
   }],

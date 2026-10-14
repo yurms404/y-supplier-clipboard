@@ -18,6 +18,13 @@ chrome.action.onClicked.addListener(async tab => {
 });
 
 chrome.runtime.onMessage.addListener((message, _sender, reply) => {
+  if (message.type === "YSC_SAVE_STYLE") {
+    chrome.downloads.download({
+      url: `data:application/json;charset=utf-8,${encodeURIComponent(String(message.text || ""))}`,
+      filename: String(message.filename || "style.ysc-style.json"), saveAs: true
+    }).then(() => reply({ ok: true })).catch(error => reply({ ok: false, error: error.message }));
+    return true;
+  }
   if (message.type !== "YSC_COPY") return;
   ensureOffscreen()
     .then(() => chrome.runtime.sendMessage({ type: "YSC_OFFSCREEN_COPY", text: String(message.text || "") }))

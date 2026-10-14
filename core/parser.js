@@ -1,6 +1,14 @@
 globalThis.YSCParser = (() => {
   const text = node => (node?.textContent || "").replace(/\s+/g, " ").trim();
   const safeQuery = selector => { try { return selector ? document.querySelector(selector) : null; } catch (_) { return null; } };
+  function imageUrl(value) {
+    const raw = typeof value === "object" && value ? (value.url || value.contentUrl || "") : value;
+    if (typeof raw !== "string" || !raw.trim()) return "";
+    try {
+      const url = new URL(String(raw || ""), location.href);
+      return /^https?:$/.test(url.protocol) ? url.href : "";
+    } catch (_) { return ""; }
+  }
   function removeBlocked(value, blacklist = []) {
     let cleaned = String(value ?? "");
     const phrases = [...new Set(blacklist.filter(v => typeof v === "string" && v.trim()).map(v => v.trim()))].sort((a, b) => b.length - a.length);
@@ -27,11 +35,12 @@ globalThis.YSCParser = (() => {
   function unitFromPrice(value) { return String(value || "").match(/(?:грн\.?|₴|UAH)\s*\/\s*([\p{L}\d²³.\-–—−]+(?:\s*м)?)/iu)?.[1] || ""; }
   function sourceValue(rule, field, data) {
     if (!rule || !rule.enabled) return "";
-    if (rule.source === "manual" || rule.source === "fixed") return rule.value || "";
-    if (rule.source === "url") return new URL(location.href).searchParams.get(rule.value || rule.attribute || "") || "";
-    if (rule.source === "css" || rule.source === "attribute") { const el = safeQuery(rule.selector); const value = rule.source === "attribute" ? el?.getAttribute(rule.attribute || "") || "" : field.startsWith("sheet") && /^(SELECT|INPUT)$/i.test(el?.tagName || "") ? text(el.selectedOptions?.[0]) || el.value || "" : text(el); return field === "article" ? cleanArticle(value) : field === "unit" ? unitFromPrice(value) || value : value; }
-    if (rule.source === "regex") { try { return (document.body.innerText.match(new RegExp(rule.regex, "im")) || [])[1] || ""; } catch (_) { return ""; } }
+    if (rule.source === "manual" || rule.source === "fixed") return field === "imageUrl" ? imageUrl(rule.value) : rule.value || "";
+    if (rule.source === "url") { const value = new URL(location.href).searchParams.get(rule.value || rule.attribute || "") || ""; return field === "imageUrl" ? imageUrl(value) : value; }
+    if (rule.source === "css" || rule.source === "attribute") { const el = safeQuery(rule.selector); const value = rule.source === "attribute" ? el?.getAttribute(rule.attribute || "") || "" : field.startsWith("sheet") && /^(SELECT|INPUT)$/i.test(el?.tagName || "") ? text(el.selectedOptions?.[0]) || el.value || "" : text(el); return field === "imageUrl" ? imageUrl(value) : field === "article" ? cleanArticle(value) : field === "unit" ? unitFromPrice(value) || value : value; }
+    if (rule.source === "regex") { try { const value = (document.body.innerText.match(new RegExp(rule.regex, "im")) || [])[1] || ""; return field === "imageUrl" ? imageUrl(value) : value; } catch (_) { return ""; } }
     if (rule.source === "jsonld") {
+      if (field === "imageUrl") return imageUrl(Array.isArray(data.image) ? data.image[0] : data.image);
       if (["sheetLength", "sheetWidth", "sheetThickness"].includes(field)) return dimensionMetadata(data, field)[0] || "";
       if (field === "price") return String(offers([data])[0]?.price ?? "");
       if (field === "unit") return offerUnit(offers([data])[0]);
@@ -40,6 +49,13 @@ globalThis.YSCParser = (() => {
     return "";
   }
   function candidates(field, blacklist = []) {
+    if (field === "imageUrl") {
+      const values = jsonLd().flatMap(product => Array.isArray(product.image) ? product.image : [product.image]).map(imageUrl);
+      // JSON-LD represents the product gallery. Social metadata is only a fallback,
+      // because it commonly repeats the first gallery image with a different CDN URL.
+      if (!values.filter(Boolean).length) values.push(imageUrl(document.querySelector('meta[property="og:image"]')?.content), imageUrl(document.querySelector('meta[name="twitter:image"]')?.content));
+      return [...new Set(values.filter(Boolean))];
+    }
     if (["sheetLength", "sheetWidth", "sheetThickness"].includes(field)) return dimensionCandidates(field);
     if (field === "price") return [...new Set([
       ...offers(jsonLd()).map(o => o.price ?? o.priceSpecification?.price), ...priceNodes().map(priceText)
@@ -86,11 +102,11 @@ globalThis.YSCParser = (() => {
     const articleValues = cleanValues(fields.article?.source === "auto" || !fields.article ? candidates("article") : [sourceValue(fields.article, "article", product)].filter(Boolean));
     const nameValues = cleanValues(fields.name?.source === "auto" || !fields.name ? candidates("name") : [sourceValue(fields.name, "name", product)].filter(Boolean));
     const valuesFor = key => cleanValues(fields[key]?.source === "auto" || !fields[key] ? candidates(key, profile.blacklist) : [sourceValue(fields[key], key, product)].filter(Boolean));
-    const priceValues = valuesFor("price").map(YSCFormatter.priceNumber).filter(Boolean), unitValues = valuesFor("unit");
+    const priceValues = valuesFor("price").map(YSCFormatter.priceNumber).filter(Boolean), unitValues = valuesFor("unit"), imageValues = valuesFor("imageUrl");
     const supplier = removeBlocked(profile.supplier || sourceValue(fields.supplier, "supplier", product) || location.hostname.split(".").slice(-2, -1)[0], profile.blacklist);
     const sheetLength = profile.format?.sheet ? valuesFor("sheetLength") : [], sheetWidth = profile.format?.sheet ? valuesFor("sheetWidth") : [];
     const sheetThickness = profile.format?.sheet ? [...new Set(valuesFor("sheetThickness").map(YSCFormatter.thicknessMm).filter(Boolean))] : [];
-    return { supplier, article: articleValues[0] || "", name: nameValues[0] || "", price: priceValues[0] || "", unit: unitValues[0] || "", sheetLength: sheetLength[0] || "", sheetWidth: sheetWidth[0] || "", sheetThickness: sheetThickness[0] || "", candidates: { article: articleValues, name: nameValues, price: priceValues, unit: unitValues, sheetLength, sheetWidth, sheetThickness }, productDetected: Boolean(product.name || text(document.querySelector("h1"))) };
+    return { supplier, article: articleValues[0] || "", name: nameValues[0] || "", price: priceValues[0] || "", unit: unitValues[0] || "", imageUrl: imageValues[0] || "", sheetLength: sheetLength[0] || "", sheetWidth: sheetWidth[0] || "", sheetThickness: sheetThickness[0] || "", candidates: { article: articleValues, name: nameValues, price: priceValues, unit: unitValues, imageUrl: imageValues, sheetLength, sheetWidth, sheetThickness }, productDetected: Boolean(product.name || text(document.querySelector("h1"))) };
   }
-  return { parse, candidates, safeQuery, text, cleanArticle, removeBlocked };
+  return { parse, candidates, safeQuery, text, cleanArticle, removeBlocked, imageUrl };
 })();
