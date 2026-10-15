@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Y Supplier Clipboard — Local image</title>
+  <link rel="stylesheet" href="local-images.css">
+</head>
+<body>
+  <main>
+    <h1 id="title">Локальна картинка</h1>
+    <p id="description"></p>
+    <p id="beginner-help" class="note"></p>
+    <label id="path-label" for="path"></label>
+    <input id="path" type="text" autocomplete="off" spellcheck="false" placeholder="C:\Images">
+    <p id="path-note" class="note"></p>
+    <p id="folder" role="status" aria-live="polite"></p>
+    <div class="actions">
+      <button id="choose" type="button">Вибрати папку</button>
+      <button id="authorize" type="button" hidden></button>
+      <button id="save-return" type="button"></button>
+    </div>
+    <label id="subfolder-label" for="subfolder"></label>
+    <div class="subfolder-row">
+      <input id="subfolder" type="text" autocomplete="off" spellcheck="false" placeholder="Images/{supplier}">
+      <button id="add-supplier" type="button"></button>
+    </div>
+    <p id="subfolder-note" class="note"></p>
+    <label id="mode-label" for="mode"></label>
+    <select id="mode">
+      <option id="mode-original" value="original"></option>
+      <option id="mode-contain" value="contain"></option>
+      <option id="mode-cover" value="cover"></option>
+    </select>
+    <div class="dimensions">
+      <div><label id="width-label" for="width"></label><input id="width" type="number" min="1" max="8192" step="1"></div>
+      <div><label id="height-label" for="height"></label><input id="height" type="number" min="1" max="8192" step="1"></div>
+      <div><label id="background-label" for="background"></label><input id="background" type="color"></div>
+    </div>
+    <p id="size-note" class="note"></p>
+    <p id="preview" class="path-preview"></p>
+    <p id="status" role="status" aria-live="polite"></p>
+  </main>
+  <script src="i18n.js"></script>
+  <script src="../storage/local-images.js"></script>
+  <script src="local-images.js"></script>
+</body>
+</html>

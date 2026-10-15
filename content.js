@@ -2,7 +2,18 @@
   const t = (key, parameters) => YSCI18n.t(key, parameters);
   let panel, profile, result, toggling = false, nextExcelBlock = 0;
   let workStyles, styleWrites = Promise.resolve(), styleSettingsVisible = false;
-  let accentColor = "#ef7900";
+  let settingsSections = [], settingsWrites = Promise.resolve();
+  let helpMode = "novice";
+  let accentColor = "#ef7900", localImageBusy = false;
+  let localImageOptions = YSCLocalImages.settings(), localImageFolderName = "";
+  function localImagePath() {
+    try { return YSCLocalImages.displayPath(localImageOptions, localImageFolderName, YSCParser.removeBlocked(result?.supplier, profile?.blacklist) || "{supplier}"); }
+    catch (error) { return t(error.message); }
+  }
+  function applyLocalImagePreferences(preferences) {
+    localImageOptions = YSCLocalImages.settings(preferences.ysc_local_image_settings);
+    localImageFolderName = preferences.ysc_local_image_folder_name || "";
+  }
   function persistStyle() {
     const selected = workStyles.styles.find(s => s.id === workStyles.selected);
     const previous = structuredClone(selected.format);
@@ -66,7 +77,7 @@
     });
     action("ysc-style-reset", "reset", async () => { profile.format.excelColumns = Array(26).fill("skip"); await persistStyle(); nextExcelBlock = 0; render(); });
     action("ysc-style-delete", "delete", async () => { if (workStyles.styles.length < 2) throw new Error(t("keep_at_least_one_style")); if (!confirm(t("delete_style_2", { name: current.name }))) return; workStyles.styles = workStyles.styles.filter(s => s.id !== current.id); const previous = workStyles.styles.at(-1); workStyles.selected = previous.id; YSCWorkStyles.apply(profile.format, previous); await persistStyle(); nextExcelBlock = 0; render(); });
-    box.append(actions);
+    box.append(actions, explanation("hint_styles"));
     const transfer = $("div", { className: "ysc-style-transfer" });
     const exporter = $("button", { id: "ysc-style-export", className: "secondary", textContent: t("export_style") });
     exporter.onclick = async () => {
@@ -104,6 +115,19 @@
     return box;
   }
   const $ = (tag, attrs = {}, children = []) => { const e = document.createElement(tag); Object.assign(e, attrs); children.forEach(c => e.append(c)); return e; };
+  const explanation = (key, parameters = {}) => $("p", { className: "ysc-explanation", textContent: t(key, parameters), hidden: helpMode === "pro" });
+  function helpModeSelector() {
+    const select = $("select", { id: "ysc-help-mode", ariaLabel: t("help_mode") });
+    for (const [value, key] of [["novice", "help_mode_novice"], ["pro", "help_mode_pro"]]) select.append($("option", { value, textContent: t(key), selected: helpMode === value }));
+    select.onchange = async () => {
+      try {
+        const selected = select.value === "pro" ? "pro" : "novice";
+        await chrome.storage.local.set({ ysc_help_mode: selected });
+        helpMode = selected; render();
+      } catch (error) { select.value = helpMode; toast(t("save_error", { error: error.message }), true); }
+    };
+    return $("section", {}, [$("label", { htmlFor: select.id, textContent: t("help_mode") }), select, explanation("hint_help_mode")]);
+  }
   function showUpdateBanner(force = false) {
     return chrome.runtime.sendMessage({ type: "YSC_CHECK_UPDATE", force }).then(reply => {
       const update = reply?.update;
@@ -129,7 +153,41 @@
     return wrapper;
   }
   function folded(key, title, children) {
-    return $("details", { id: `ysc-${key}` }, [$("summary", { textContent: t(title) }), ...children]);
+    const section = $("details", { id: `ysc-${key}` }, [$("summary", { textContent: t(title) }), ...children]);
+    section.addEventListener("toggle", event => {
+      if (event.target !== section || !section.open) return;
+      for (const sibling of section.parentElement?.children || []) {
+        if (sibling !== section && sibling.tagName === "DETAILS") sibling.open = false;
+      }
+      let settingsParent = section;
+      while (settingsParent && settingsParent.id !== "ysc-settings") settingsParent = settingsParent.parentElement;
+      if (!settingsParent) return;
+      for (const nested of section.querySelectorAll("details")) nested.open = false;
+      if (section === settingsParent) {
+        for (const id of settingsSections) {
+          const remembered = settingsParent.querySelector(`#${id}`);
+          if (remembered?.tagName !== "DETAILS" || remembered.parentElement !== settingsParent) continue;
+          for (const sibling of remembered.parentElement.children) {
+            if (sibling !== remembered && sibling.tagName === "DETAILS") sibling.open = false;
+          }
+          remembered.open = true;
+        }
+      }
+      const selected = [...settingsParent.children].filter(el => el.tagName === "DETAILS" && el.open).map(el => el.id);
+      if (JSON.stringify(selected) !== JSON.stringify(settingsSections)) {
+        settingsSections = selected;
+        settingsWrites = settingsWrites.then(() => chrome.storage.local.set({ ysc_settings_sections: selected })).catch(() => {});
+      }
+      const currentPanel = panel;
+      requestAnimationFrame(() => {
+        if (panel !== currentPanel || !section.isConnected || !section.open) return;
+        const body = panel.querySelector(".ysc-body");
+        if (!body) return;
+        const top = body.scrollTop + section.getBoundingClientRect().bottom - body.getBoundingClientRect().bottom + 8;
+        body.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      });
+    });
+    return section;
   }
   function languageSelector() {
     const select = $("select", { value: YSCI18n.language, id: "ysc-language" });
@@ -152,9 +210,10 @@
   }
   function blacklistSettings() {
     const area = $("textarea", { rows: 3, maxLength: 5000, value: (profile.blacklist || []).join("\n"), placeholder: "Код товара:\nКод товару:" });
-    const status = $("p", { textContent: t("for_this_site_one_phrase_per_line_saved_automatically_matches_are_ex") });
+    const status = $("p", { id: "ysc-blacklist-status", role: "status", textContent: t("for_this_site_one_phrase_per_line_saved_automatically_matches_are_ex"), hidden: helpMode === "pro" });
     let revision = 0;
     area.oninput = async () => {
+      status.hidden = false;
       const entries = [...new Set(area.value.split(/\r?\n/).map(v => v.trim()).filter(Boolean))];
       if (entries.length > 100 || entries.some(v => v.length > 200)) { status.textContent = t("maximum_100_entries_of_200_characters_each"); return; }
       profile.blacklist = entries;
@@ -166,13 +225,13 @@
         if (field) field.value = result[key];
       }
       result.candidates = parsed.candidates; result.unitDefaulted = parsed.unitDefaulted; result.confirmed = {}; result.sheetConfirmed = false;
-      refreshPreview(); status.textContent = t("saving");
+      refreshPreview(); status.hidden = false; status.textContent = t("saving");
       try {
         await YSCProfiles.saveBlacklist(profile, entries);
         if (revision === currentRevision) status.textContent = t("saved_for_this_site_text_is_removed_from_fields_automatically");
       } catch (error) { if (revision === currentRevision) status.textContent = t("save_error", { error: t(error.message) }); }
     };
-    return folded("blacklist", t("blacklist_remove_unwanted_text"), [area, status]);
+    return folded("blacklist", t("blacklist_remove_unwanted_text"), [area, explanation("hint_blacklist"), status]);
   }
   function previewElement() {
     const preview = $("div", { className: "ysc-preview" });
@@ -194,6 +253,8 @@
     nextExcelBlock = 0;
     panel.querySelector(".ysc-preview").replaceWith(previewElement());
     panel.querySelector("#ysc-quick-preview").textContent = quickText();
+    const localPath = panel.querySelector("#ysc-local-image-path");
+    if (localPath) localPath.textContent = localImagePath();
     const sheetStatus = panel.querySelector("#ysc-sheet-status");
     if (sheetStatus) sheetStatus.textContent = result.sheetConfirmed ? t("confirmed", { unit: YSCFormatter.sheetUnit(outputFields(), profile.format) }) : t("check_dimensions", { unit: YSCFormatter.sheetUnit(outputFields(), profile.format) });
     const steps = panel.querySelector(".ysc-excel-steps");
@@ -209,9 +270,9 @@
     if (!profile.format.excel) return steps;
     try {
       const blocks = YSCFormatter.excelBlocks(outputFields(), profile.format);
-      if (profile.format.excelVertical) steps.append($("p", { className: "ysc-excel-session-hint", textContent: t("enter_mode_values_are_pasted_downwards_sessions_rows_select_the_star", { count: blocks.length, targets: blocks.map(block => block.target).join(" → ") }) }));
+      if (profile.format.excelVertical) steps.append($("p", { className: "ysc-excel-session-hint", hidden: helpMode === "pro", textContent: t("enter_mode_values_are_pasted_downwards_sessions_rows_select_the_star", { count: blocks.length, targets: blocks.map(block => block.target).join(" → ") }) }));
       else
-      steps.append($("p", { className: "ysc-excel-session-hint", textContent: blocks.length > 1
+      steps.append($("p", { className: "ysc-excel-session-hint", hidden: helpMode === "pro", textContent: blocks.length > 1
         ? t("copy_sessions_copy_each_block_in_order_and_paste_into_its_starting_c", { count: blocks.length, targets: blocks.map(block => block.target).join(" → ") })
         : t("one_copy_session_copy_once_and_paste_into_column_all_selected_fields", { target: blocks[0].target, column: YSCFormatter.columnName(blocks[0].start) }) }));
       blocks.forEach((block, index) => {
@@ -230,7 +291,7 @@
       try { profile.format.excelSeparator = separator.value; profile.format.excelVertical = separator.value === "enter"; await persistStyle(); nextExcelBlock = 0; render(); }
       catch (error) { toast(t(error.message), true); }
     };
-    settings.append($("label", { htmlFor: separator.id, textContent: t("separator") }), separator);
+    settings.append($("label", { htmlFor: separator.id, textContent: t("separator") }), separator, explanation("hint_separator"));
     if (currentSeparator === "ascii") {
       const ascii = $("input", { id: "ysc-excel-ascii", type: "number", min: "1", max: "127", value: String(profile.format.excelAscii ?? 44) });
       ascii.onchange = async () => {
@@ -240,9 +301,9 @@
       };
       settings.append($("label", { htmlFor: ascii.id, textContent: t("ascii_code_1_127") }), ascii);
     }
-    if (profile.format.excelVertical) settings.append($("p", { textContent: t("in_enter_mode_the_layout_defines_rows_1_26_instead_of_columns_a_z_pl") }));
+    if (profile.format.excelVertical) settings.append(explanation("in_enter_mode_the_layout_defines_rows_1_26_instead_of_columns_a_z_pl"));
     const columns = YSCFormatter.excelColumns(profile.format);
-    const labels = { skip: t("leave_unchanged"), fullName: t("full_description"), supplier: t("supplier"), article: t("article_sku"), name: t("product_name"), unit: t("unit_with_dimensions"), plainUnit: t("unit_only"), price: t("price"), currency: t("currency"), sheetLength: t("length_m"), sheetWidth: t("width_m"), sheetThickness: t("thickness_mm"), sheetSize: t("sheet_size_m"), url: t("current_page_url"), imageUrl: t("product_image_url"), imageFormula: t("image_image_url"), join: t("join_with_a_space") };
+    const labels = { skip: t("leave_unchanged"), fullName: t("full_description"), supplier: t("supplier"), article: t("article_sku"), name: t("product_name"), unit: t("unit_with_dimensions"), plainUnit: t("unit_only"), price: t("price"), currency: t("currency"), sheetLength: t("length_m"), sheetWidth: t("width_m"), sheetThickness: t("thickness_mm"), sheetSize: t("sheet_size_m"), url: t("current_page_url"), imageUrl: t(result.localImagePath ? "local_image_export_path" : "product_image_url"), imageFormula: t(result.localImagePath ? "local_image_export_formula" : "image_image_url"), join: t("join_with_a_space") };
     const strip = $("div", { className: "ysc-excel-row" });
     // Literal text belongs to the selected style, independently for each cell.
     labels.anyText = t("any_text");
@@ -279,7 +340,9 @@
       strip.append(cell);
     }
     settings.append(strip);
-    if (!profile.format.excelVertical) settings.append($("p", { textContent: t("choose_a_field_or_leave_unchanged_for_each_column_fields_may_be_repe") }), $("p", { textContent: t("adjacent_columns_are_combined_into_one_copy_session_gaps_create_sepa") }));
+    settings.append(explanation("hint_excel_columns"));
+    if (result.localImagePath && (columns.includes("imageFormula") || profile.format.excelImageFormula && columns.includes("imageUrl"))) settings.append(explanation("hint_local_image_formula"));
+    if (!profile.format.excelVertical) settings.append(explanation("choose_a_field_or_leave_unchanged_for_each_column_fields_may_be_repe"), explanation("adjacent_columns_are_combined_into_one_copy_session_gaps_create_sepa"));
     settings.append(excelSteps());
     return settings;
   }
@@ -297,7 +360,7 @@
         profile.format.imageBackgroundOpacity = value; render();
       } catch (error) { slider.value = String(opacity); toast(t(error.message), true); }
     };
-    settings.append($("div", { className: "ysc-compact-setting" }, [label, slider]));
+    settings.append($("div", { className: "ysc-compact-setting" }, [label, slider]), explanation("hint_opacity"));
     const rgb = hex => {
       const value = hex.slice(1);
       return `R ${parseInt(value.slice(0, 2), 16)} G ${parseInt(value.slice(2, 4), 16)} B ${parseInt(value.slice(4, 6), 16)}`;
@@ -311,7 +374,17 @@
       catch (error) { color.value = accentColor; toast(t(error.message), true); }
     };
     settings.append($("div", { className: "ysc-compact-setting" }, [$("label", { htmlFor: colorButton.id, textContent: t("accent_color") }), $("div", { className: "ysc-accent-picker" }, [colorButton, color]) ]));
+    settings.append(explanation("hint_accent"));
     return settings;
+  }
+  function localImageSettings() {
+    const folder = $("button", { id: "ysc-local-image-folder", type: "button", className: "secondary", textContent: t("local_image_configure") });
+    folder.onclick = openLocalImageSettings;
+    const path = $("div", { id: "ysc-local-image-path", textContent: localImagePath(), role: "textbox", tabIndex: 0, ariaReadOnly: "true", ariaMultiline: "true", ariaLabel: t("local_image_path") });
+    const contents = [path];
+    if ((localImageOptions.path || localImageFolderName) && !/^[a-z]:[\\/]|^[\\/]/i.test(localImageOptions.path)) contents.push(explanation("local_image_full_path_needed"));
+    contents.push(explanation("local_image_folder_description"), explanation("hint_local_image"), folder);
+    return folded("local-image-settings", t("local_image"), contents);
   }
   function excelValidationError() {
     const columns = YSCFormatter.excelColumns(profile.format);
@@ -321,7 +394,7 @@
     if ((needs("supplier") || needs("fullName") && profile.format.supplier !== false) && !result.supplier) return t("enter_the_supplier");
     if ((needs("unit") || needs("plainUnit")) && !result.unit) return t("fill_in_for_the_selected_column", { field: t("unit") });
     if (needs("price") && String(result.price || "").trim() && !YSCFormatter.priceNumber(result.price)) return t("enter_a_valid_price_for_the_selected_column");
-    if ((needs("imageUrl") || needs("imageFormula")) && !result.imageUrl) return t("image_url_was_not_found_configure_the_field");
+    if ((needs("imageUrl") || needs("imageFormula")) && !result.localImagePath && !result.imageUrl) return t("image_url_was_not_found_configure_the_field");
     for (const [key, title] of [["sheetLength", "length_m"], ["sheetWidth", "width_m"], ["sheetThickness", "thickness_mm"], ["sheetSize", "sheet_size_m"]]) {
       if (needs(key) && !YSCFormatter.excelValue(key, result, profile.format)) return t("fill_in_for_the_selected_column", { field: t(title) });
     }
@@ -376,6 +449,7 @@
         };
         const name = `${p.supplier || p.domain}${p.urlPattern ? ` · ${p.urlPattern}` : ""}`;
         row.append($("div", { className: "ysc-profile-open" }, [use, $("span", { textContent: name })]));
+        row.append(explanation("hint_profile_open"));
         if (p.lastUrl) row.append($("p", { className: "ysc-last-url", textContent: p.lastUrl }));
         details.append(row);
         adminProfiles.append($("section", { className: "ysc-domain-profile" }, [$("label", {}, [enabled, document.createTextNode(` ${name}`)]), del]));
@@ -392,8 +466,9 @@
         domains.forEach(domain => list.append($("option", { value: domain, textContent: `${domain} (${profiles.filter(p => p.domain === domain).length})`, selected: domain === selected })));
         list.value = selected; list.disabled = !domains.length;
         status.textContent = domains.length ? t("domains_the_number_in_parentheses_is_the_profile_count_including_dis", { count: domains.length }) : t("no_saved_profiles");
+        status.hidden = Boolean(domains.length && helpMode === "pro");
         showSelected();
-      } catch (error) { status.textContent = t("save_error", { error: error.message }); }
+      } catch (error) { status.hidden = false; status.textContent = t("save_error", { error: error.message }); }
     }
     list.onchange = showSelected;
     remove.onclick = async () => {
@@ -407,7 +482,7 @@
         if (domain === profile.domain) await run(true); else { busy = false; await refresh(); }
       } catch (error) { busy = false; remove.disabled = false; toast(t(error.message), true); }
     };
-    box.append($("label", { htmlFor: list.id, textContent: t("all_profiled_domains") }), list, details,
+    box.append($("label", { htmlFor: list.id, textContent: t("all_profiled_domains") }), list, explanation("hint_profiles"), details,
       folded("profile-tools", t("management_and_backup"), [status, adminProfiles, remove, $("div", { className: "ysc-backup-controls" }, backupControls)]));
     refresh(); return box;
   }
@@ -557,6 +632,38 @@
       rerun();
     }, () => { if (panel?.isConnected) panel.style.display = "flex"; });
   }
+  async function openLocalImageSettings() {
+    try {
+      const reply = await chrome.runtime.sendMessage({ type: "YSC_LOCAL_IMAGE_SETTINGS" });
+      if (!reply?.ok) throw new Error(reply?.error || "could_not_save_the_file");
+    } catch (error) { toast(t("local_image_failed", { error: t(error.message) }), true); }
+  }
+  async function pickLocalImage() {
+    if (localImageBusy) return;
+    localImageBusy = true;
+    try {
+      const supplier = YSCParser.removeBlocked(result.supplier, profile.blacklist);
+      const ready = await chrome.runtime.sendMessage({ type: "YSC_LOCAL_IMAGE_READY", supplier });
+      if (!ready?.ok) throw new Error(ready?.error || "choose_local_image_folder_first");
+      const name = quickText();
+      if (!name) throw new Error("fill_in_the_fields_below");
+      panel.style.display = "none";
+      YSCPicker.startRegion(t("select_local_image_region"), async selected => {
+        try {
+          const reply = await chrome.runtime.sendMessage({ type: "YSC_CAPTURE_LOCAL_IMAGE", ...selected, name, supplier });
+          if (!reply?.ok) throw new Error(reply?.error || "could_not_save_the_file");
+          result.localImagePreview = reply.preview;
+          result.localImageFilename = reply.filename;
+          result.localImagePath = reply.path || reply.filename;
+          render(); toast(t("local_image_saved", { filename: result.localImagePath }));
+        } catch (error) { toast(t("local_image_failed", { error: t(error.message) }), true); }
+        finally { localImageBusy = false; if (panel?.isConnected) panel.style.display = "flex"; }
+      }, () => { localImageBusy = false; if (panel?.isConnected) panel.style.display = "flex"; });
+    } catch (error) {
+      localImageBusy = false; if (panel?.isConnected) panel.style.display = "flex";
+      toast(t("local_image_failed", { error: t(error.message) }), true);
+    }
+  }
   function fieldEditor(key, title) {
     const rule = profile.fields[key] ||= { enabled: true, source: "auto", selector: "", regex: "", attribute: "", value: "" }, section = $("section", { className: "ysc-rule" });
     section.append($("h3", { textContent: t(title) }));
@@ -568,6 +675,8 @@
     Object.entries(sources).forEach(([value, label]) => source.append($("option", { value, textContent: t(label), selected: rule.source === value })));
     source.onchange = () => { rule.source = source.value; rerun(); };
     section.append($("label", { textContent: t("value_source") }), source);
+    const sourceHints = { auto: "hint_source_auto", jsonld: "hint_source_jsonld", css: "hint_source_css", attribute: "hint_source_attribute", regex: "hint_source_regex", url: "hint_source_url", manual: "hint_source_manual", fixed: "hint_source_manual" };
+    if (sourceHints[rule.source]) section.append(explanation(sourceHints[rule.source]));
     const add = (label, property) => section.append(...input(label, rule[property], v => { rule[property] = v; rerun(); }, "text", "change"));
     if (["css", "attribute"].includes(rule.source)) add(t("css_selector"), "selector");
     if (rule.source === "attribute") add(t("attribute_name"), "attribute");
@@ -578,6 +687,10 @@
   }
   function render() {
     const opened = new Set([...(panel?.querySelectorAll("details[open]") || [])].map(el => el.id));
+    if (!panel?.isConnected) {
+      for (const section of panel?.querySelector("#ysc-settings")?.querySelectorAll("details") || []) opened.delete(section.id);
+      for (const id of settingsSections) opened.add(id);
+    }
     if (panel?.querySelector("#ysc-style-settings")) styleSettingsVisible = !panel.querySelector("#ysc-style-settings").hidden;
     const scrollTop = panel?.querySelector(".ysc-body")?.scrollTop || 0;
     const columnScroll = panel?.querySelector(".ysc-excel-row")?.scrollLeft || 0;
@@ -594,17 +707,23 @@
     inlinePicker(currentArticle, "article", t("pick_article_on_page"));
     inlinePicker(currentName, "name", t("pick_name_on_page"));
     const imageChoices = result.candidates.imageUrl || [];
-    if (imageChoices.length) {
+    {
       const imageIndex = imageChoices.indexOf(result.imageUrl);
-      const chooseImage = offset => { const start = imageIndex < 0 ? (offset > 0 ? -1 : 0) : imageIndex; result.imageUrl = imageChoices[(start + offset + imageChoices.length) % imageChoices.length]; render(); };
+      const chooseImage = offset => { const start = imageIndex < 0 ? (offset > 0 ? -1 : 0) : imageIndex; result.imageUrl = imageChoices[(start + offset + imageChoices.length) % imageChoices.length]; delete result.localImagePreview; delete result.localImageFilename; delete result.localImagePath; render(); };
       const imageSwitch = $("div", { className: "ysc-image-switch" });
       const previous = $("span", { id: "ysc-image-previous", className: "ysc-image-nav", textContent: "<", role: "button", tabIndex: 0, ariaLabel: t("previous_image"), title: t("previous_image") });
       const next = $("span", { id: "ysc-image-next", className: "ysc-image-nav", textContent: ">", role: "button", tabIndex: 0, ariaLabel: t("next_image"), title: t("next_image") });
       const picker = $("span", { id: "ysc-pick-image", className: "ysc-image-pick", role: "button", tabIndex: 0, title: t("pick_the_product_image_on_the_page"), ariaLabel: t("pick_the_product_image_on_the_page") }, [$("span", { className: "ysc-cursor-icon" })]);
+      const localPicker = $("span", { id: "ysc-pick-local-image", className: "ysc-image-pick ysc-local-image-pick", role: "button", tabIndex: 0, title: t("pick_local_image_region"), ariaLabel: t("pick_local_image_region") }, [$("span", { className: "ysc-capture-square", ariaHidden: "true" }), $("span", { className: "ysc-cursor-icon", ariaHidden: "true" })]);
       const activate = (element, action) => { element.onclick = action; element.onkeydown = event => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); action(); } }; };
       activate(previous, () => chooseImage(-1)); activate(next, () => chooseImage(1)); activate(picker, pickImage);
-      imageSwitch.append(previous, $("span", { id: "ysc-image-choice", textContent: t("image_of", { current: imageIndex + 1, total: imageChoices.length }) }), next, picker);
+      activate(localPicker, pickLocalImage);
+      if (imageChoices.length) imageSwitch.append(previous);
+      imageSwitch.append($("span", { id: "ysc-image-choice", textContent: result.localImageFilename ? t("screenshot") : result.imageUrl ? t("image_of", { current: imageIndex + 1, total: imageChoices.length }) : t("image_could_not_be_detected") }));
+      if (imageChoices.length) imageSwitch.append(next);
+      imageSwitch.append(picker, localPicker);
       imageStage.append(imageSwitch);
+      if (result.localImageFilename) imageStage.append($("p", { className: "ysc-help-note", textContent: t("local_image_saved", { filename: result.localImagePath || result.localImageFilename }) }));
     }
     panel.append(imageStage);
     const pricing = $("div", { className: "ysc-pricing ysc-price-row" });
@@ -658,12 +777,12 @@
     const importer = $("input", { type:"file", accept:"application/json", style:"display:none" }); importer.onchange = async () => { try { const incoming = YSCProfiles.validate(JSON.parse(await importer.files[0].text())); await chrome.storage.local.set({ ysc_profiles: incoming }); toast(t("profiles_imported")); } catch (e) { toast(t("invalid_file", { error: t(e.message) }), true); } }; const importButton = $("button", { textContent:t("import_json"), className:"secondary" }); importButton.onclick = () => importer.click();
     formatBox.querySelector("label")?.remove();
     rulesBox.remove();
-    const formatRules = folded("format-rules", t("formatting_and_extraction_rules"), [formatBox, ...[...rulesBox.children].slice(1)]);
+    const formatRules = folded("format-rules", t("formatting_and_extraction_rules"), [formatBox, explanation("hint_formatting"), explanation("hint_extraction"), ...[...rulesBox.children].slice(1)]);
     panel.append(formatRules);
     const profilesBox = folded("profiles", t("profiles_and_backup"), [domainManager([exportButton, importButton, importer])]);
     panel.append(profilesBox);
-    const settings = folded("settings", t("settings"), [imageSettingsBox, profilesBox, panel.querySelector("#ysc-blacklist"), formatRules]);
-    settings.querySelector("summary").after(languageSelector());
+    const globals = folded("global-settings", t("global_settings"), [helpModeSelector(), languageSelector(), explanation("hint_language"), imageSettingsBox]);
+    const settings = folded("settings", t("settings"), [globals, localImageSettings(), profilesBox, panel.querySelector("#ysc-blacklist"), formatRules]);
     const helpLink = (label, path) => $("a", { textContent: t(label), href: path, target: "_blank", rel: "noopener noreferrer" });
     const updateStatus = $("p", { id: "ysc-update-status", className: "ysc-help-note" });
     const checkUpdate = $("button", { id: "ysc-check-update", className: "secondary", textContent: t("check_for_updates") });
@@ -677,9 +796,9 @@
     };
     settings.append(folded("help", t("help"), [
       $("p", { id: "ysc-help-name", textContent: "Y Supplier Clipboard" }),
-      $("p", { id: "ysc-help-description", textContent: t("supplier_clipboard_means_a_clipboard_for_supplier_data_the_extension") }),
+      $("p", { id: "ysc-help-description", hidden: helpMode === "pro", textContent: t("supplier_clipboard_means_a_clipboard_for_supplier_data_the_extension") }),
       $("p", { id: "ysc-code-version", textContent: t("code_version", { version: chrome.runtime.getManifest().version }) }),
-      $("p", { id: "ysc-revision-date", textContent: t("revision_date", { date: "14.10.2026" }) }),
+      $("p", { id: "ysc-revision-date", textContent: t("revision_date", { date: "15.10.2026" }) }),
       checkUpdate,
       updateStatus,
       $("p", {}, [helpLink("readme_md_instructions", chrome.runtime.getURL("ui/help.html?doc=readme"))]),
@@ -687,14 +806,14 @@
       $("p", {}, [helpLink("telegram_support_yurms", "https://web.telegram.org/a/#-1001323392064_1018")])
     ]));
     panel.append(settings);
-    const close = $("button", { textContent:t("close"), className:"secondary" }); close.onclick = () => { YSCPicker.stop(); panel.remove(); };
+    const close = $("button", { textContent:t("close"), className:"secondary" }); close.onclick = () => { YSCPicker.stop(); localImageBusy = false; panel.remove(); };
     const body = $("div", { className: "ysc-body" });
     const opacity = Number(profile.format.imageBackgroundOpacity);
     const imageOpacity = Number.isFinite(opacity) ? Math.max(0, Math.min(100, Math.round(opacity))) : 50;
     if (imageStage.style.setProperty) imageStage.style.setProperty("--ysc-image-overlay-opacity", `${imageOpacity}%`);
     else imageStage.style["--ysc-image-overlay-opacity"] = `${imageOpacity}%`;
-    if (result.imageUrl) {
-      const image = `url("${result.imageUrl}")`;
+    if (result.localImagePreview || result.imageUrl) {
+      const image = `url("${result.localImagePreview || result.imageUrl}")`;
       if (imageStage.style.setProperty) imageStage.style.setProperty("--ysc-product-image", image);
       else imageStage.style["--ysc-product-image"] = image;
     }
@@ -705,7 +824,13 @@
       if (panel.style.setProperty) panel.style.setProperty(key, accentColor);
       else panel.style[key] = accentColor;
     }
-    panel.querySelectorAll("details").forEach(el => { el.open = opened.has(el.id); });
+    const restoredParents = new Set(), accordionGroups = new Map();
+    panel.querySelectorAll("details").forEach(el => {
+      if (!accordionGroups.has(el.parentElement)) accordionGroups.set(el.parentElement, `ysc-accordion-${accordionGroups.size}`);
+      el.name = accordionGroups.get(el.parentElement);
+      el.open = opened.has(el.id) && !restoredParents.has(el.parentElement);
+      if (el.open) restoredParents.add(el.parentElement);
+    });
     document.documentElement.append(panel); body.scrollTop = scrollTop;
     panel.querySelector(".ysc-excel-row").scrollLeft = columnScroll;
     showUpdateBanner();
@@ -713,13 +838,18 @@
   async function run(forcePanel = false) {
     await YSCI18n.load();
     await styleWrites;
+    await settingsWrites;
     styleSettingsVisible = false;
     if (panel?.querySelector("#ysc-style-settings")) panel.querySelector("#ysc-style-settings").hidden = true;
     const savedProfile = await YSCProfiles.get();
     profile = savedProfile || YSCProfiles.base(location.hostname);
     try { if (savedProfile) Object.assign(profile, await YSCProfiles.remember(profile, location.href)); }
     catch (error) { toast(t("could_not_remember_the_page", { error: error.message }), true); }
-    const preferences = await chrome.storage.local.get(["ysc_work_styles", "ysc_work_style", "ysc_excel_mode", "ysc_excel_layout", "ysc_excel_columns", "ysc_excel_vertical", "ysc_excel_image_formula", "ysc_image_background_opacity", "ysc_accent_color", "ysc_language"]);
+    const preferences = await chrome.storage.local.get(["ysc_work_styles", "ysc_work_style", "ysc_excel_mode", "ysc_excel_layout", "ysc_excel_columns", "ysc_excel_vertical", "ysc_excel_image_formula", "ysc_image_background_opacity", "ysc_accent_color", "ysc_language", "ysc_local_image_settings", "ysc_local_image_folder_name", "ysc_settings_sections", "ysc_help_mode"]);
+    helpMode = preferences.ysc_help_mode === "pro" ? "pro" : "novice";
+    const rememberedSections = ["ysc-global-settings", "ysc-local-image-settings", "ysc-profiles", "ysc-blacklist", "ysc-format-rules", "ysc-help"];
+    settingsSections = Array.isArray(preferences.ysc_settings_sections) ? preferences.ysc_settings_sections.filter(id => rememberedSections.includes(id)).slice(0, 1) : [];
+    applyLocalImagePreferences(preferences);
     accentColor = /^#[0-9a-f]{6}$/i.test(preferences.ysc_accent_color || "") ? preferences.ysc_accent_color : "#ef7900";
     YSCI18n.setLanguage(preferences.ysc_language);
     profile.format.excel = true;
@@ -753,7 +883,7 @@
     toggling = true;
     try {
       if (panel?.isConnected) {
-        YSCPicker.stop();
+        YSCPicker.stop(); localImageBusy = false;
         panel.style.display = "flex";
         // Copy the current edited result without reloading the saved profile.
         await copy();
@@ -761,5 +891,13 @@
     } catch (error) { toast(t("could_not_open_settings", { error: t(error.message) }), true); }
     finally { toggling = false; }
   }
-  chrome.runtime.onMessage.addListener(message => { if (message.type === "YSC_RUN") run(); if (message.type === "YSC_CONFIGURE") togglePanel(); if (message.type === "YSC_NOTICE") toast(t(message.text), true); });
+  chrome.runtime.onMessage.addListener((message, _sender, reply) => {
+    if (message.type === "YSC_LOCAL_IMAGE_CHANGED") {
+      chrome.storage.local.get(["ysc_local_image_settings", "ysc_local_image_folder_name"]).then(preferences => {
+        applyLocalImagePreferences(preferences); if (panel?.isConnected) render(); reply?.({ ok: true });
+      }).catch(error => reply?.({ ok: false, error: error.message }));
+      return true;
+    }
+    if (message.type === "YSC_RUN") run(); if (message.type === "YSC_CONFIGURE") togglePanel(); if (message.type === "YSC_NOTICE") toast(t(message.text), true);
+  });
 })();

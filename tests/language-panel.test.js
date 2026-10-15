@@ -3,6 +3,7 @@ const assert = require("node:assert/strict"), fs = require("node:fs"), vm = requ
 class Element {
   constructor(tag) { this.tagName = tag.toUpperCase(); this.childNodes = []; this.style = {}; this.listeners = {}; this.textContent = ""; }
   get children() { return this.childNodes.filter(n => n.tagName !== "#TEXT"); }
+  get parentElement() { return this.parent || null; }
   get isConnected() { return this === root || Boolean(this.parent?.isConnected); }
   append(...nodes) { for (const node of nodes) { node.remove(); node.parent = this; this.childNodes.push(node); } }
   remove() { if (this.parent) this.parent.childNodes.splice(this.parent.childNodes.indexOf(this), 1); this.parent = null; }
@@ -23,12 +24,14 @@ const document = { documentElement: root, createElement: tag => new Element(tag)
 const profile = { id: "viyar", domain: "viyar.example", supplier: "VIYAR", fields: Object.fromEntries(["article", "name", "price", "unit"].map(key => [key, { enabled: true, source: "auto" }])), format: {} };
 let stored = {}, listener, availableUpdate = null;
 const picked = [], exportedStyles = [];
+const localImageMessages = [];
+const scrollFrames = [];
 let domainProfiles = [], allowDelete = true;
 const deletedDomains = [], confirmations = [];
 const navigations = [], selectedProfiles = [], rememberedPages = [];
 const product = { supplier: "VIYAR", article: "190218", name: "Гвинт цинк", price: "1.02", unit: "шт", imageUrl: "https://images.example/one.jpg", productDetected: true, candidates: { article: ["190218"], name: ["Гвинт цинк"], price: ["1.02"], unit: ["шт"], imageUrl: ["https://images.example/one.jpg", "https://images.example/two.jpg"] } };
 const context = {
-  crypto: require("node:crypto"),
+  crypto: require("node:crypto"), TextEncoder, requestAnimationFrame: callback => scrollFrames.push(callback),
   document, structuredClone, location: { hostname: "viyar.example", href: "https://viyar.example/product?variant=18#details", assign(url) { navigations.push(url); } }, setTimeout: () => 0,
   fetch: async url => ({ ok: true, json: async () => JSON.parse(fs.readFileSync(url.replace("chrome-extension://test/", ""), "utf8")) }),
   confirm: message => { confirmations.push(message); return allowDelete; },
@@ -40,20 +43,89 @@ const context = {
     removeDomain: async domain => { deletedDomains.push(domain); domainProfiles = domainProfiles.filter(p => p.domain !== domain); }
   },
   YSCParser: { parse: () => structuredClone(product), removeBlocked: value => value },
-  YSCPicker: { stop() {}, start(key, callback, cancelCallback) { picked.push(key); this.callback = callback; this.cancel = cancelCallback; } },
+  YSCPicker: { stop() {}, start(key, callback, cancelCallback) { picked.push(key); this.callback = callback; this.cancel = cancelCallback; }, startRegion(instructions, callback, cancelCallback) { this.regionInstructions = instructions; this.regionCallback = callback; this.regionCancel = cancelCallback; } },
   chrome: {
     storage: { local: { get: async () => ({ ...stored }), set: async value => Object.assign(stored, value) } },
-    runtime: { getManifest: () => JSON.parse(fs.readFileSync("manifest.json", "utf8")), getURL: path => `chrome-extension://test/${path}`, sendMessage: async message => { if (message.type === "YSC_SAVE_STYLE") exportedStyles.push(message); else if (message.type === "YSC_CHECK_UPDATE") return { update: availableUpdate }; else copied.push(message.text); return { ok: true }; }, onMessage: { addListener: callback => { listener = callback; } } }
+    runtime: { getManifest: () => JSON.parse(fs.readFileSync("manifest.json", "utf8")), getURL: path => `chrome-extension://test/${path}`, sendMessage: async message => { if (message.type.startsWith("YSC_LOCAL_IMAGE") || message.type === "YSC_CAPTURE_LOCAL_IMAGE") { localImageMessages.push(message); return { ok: true, filename: "Product.jpg", path: "C:\\Images\\Catalog\\VIYAR\\Product.jpg", preview: "data:image/jpeg;base64,AAAA" }; } if (message.type === "YSC_SAVE_STYLE") exportedStyles.push(message); else if (message.type === "YSC_CHECK_UPDATE") return { update: availableUpdate }; else copied.push(message.text); return { ok: true }; }, onMessage: { addListener: callback => { listener = callback; } } }
   }
 };
 vm.createContext(context);
-for (const path of ["ui/i18n.js", "core/formatter.js", "storage/work-styles.js", "content.js"]) vm.runInContext(fs.readFileSync(path, "utf8"), context);
+for (const path of ["ui/i18n.js", "core/formatter.js", "storage/work-styles.js", "storage/local-images.js", "content.js"]) vm.runInContext(fs.readFileSync(path, "utf8"), context);
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const copied = [];
 (async () => {
+  const originalImage = product.imageUrl, originalImages = product.candidates.imageUrl;
+  product.imageUrl = "";
+  for (const missingImages of [[], undefined]) {
+    product.candidates.imageUrl = missingImages;
+    listener({ type: "YSC_CONFIGURE" }); await settle();
+    const missingPanel = root.querySelector("#ysc-panel");
+    assert.equal(missingPanel.querySelector("#ysc-image-choice").textContent, "Зображення не вдалось визначити");
+    assert.equal(missingPanel.querySelector("#ysc-image-previous"), null);
+    assert.equal(missingPanel.querySelector("#ysc-image-next"), null);
+    const imagePicker = missingPanel.querySelector("#ysc-pick-image");
+    assert.equal(imagePicker.ariaLabel, "Вибрати зображення товару на сторінці");
+    assert.ok(imagePicker.querySelector(".ysc-cursor-icon"));
+    imagePicker.onclick();
+    assert.equal(picked.at(-1), "imageUrl");
+    assert.equal(missingPanel.style.display, "none");
+    context.YSCPicker.cancel();
+    assert.equal(missingPanel.style.display, "flex", "Cancelling image selection restores the missing-image panel");
+    let prevented = false;
+    imagePicker.onkeydown({ key: "Enter", preventDefault() { prevented = true; } });
+    assert.ok(prevented);
+    assert.equal(missingPanel.style.display, "none", "The missing-image picker is keyboard accessible");
+    context.YSCPicker.cancel();
+    const localPicker = missingPanel.querySelector("#ysc-pick-local-image");
+    assert.ok(localPicker.querySelector(".ysc-capture-square"), "Local capture has a distinct square beside the cursor");
+    await localPicker.onclick();
+    assert.equal(localImageMessages.at(-1).type, "YSC_LOCAL_IMAGE_READY");
+    assert.equal(missingPanel.style.display, "none");
+    context.YSCPicker.regionCancel();
+    assert.equal(missingPanel.style.display, "flex");
+    const correctedArticle = missingPanel.querySelector("#ysc-value-article");
+    correctedArticle.value = "190218-local"; correctedArticle.listeners.input();
+    await localPicker.onclick();
+    await context.YSCPicker.regionCallback({ rect: { x: 10, y: 20, width: 100, height: 80 }, viewport: { width: 800, height: 600 } });
+    assert.equal(localImageMessages.at(-1).name, "VIYAR 190218-local Гвинт цинк", "JPEG uses the ready name including manual corrections");
+    let capturedPanel = root.querySelector("#ysc-panel");
+    assert.match(capturedPanel.querySelector(".ysc-product-image-stage").style["--ysc-product-image"], /data:image\/jpeg;base64,AAAA/);
+    assert.equal(capturedPanel.querySelector("#ysc-image-choice").textContent, "Скриншот", "A saved screenshot replaces the missing-image status");
+    assert.equal(capturedPanel.querySelector("#ysc-value-article").value, "190218-local", "Screenshot capture preserves edited product data");
+    stored.ysc_local_image_settings = { path: "C:\\Images", confirmedPath: "C:\\Images", subfolder: "Catalog/{supplier}" };
+    stored.ysc_local_image_folder_name = "Images";
+    const copiesBeforeReturn = copied.length;
+    await new Promise(resolve => listener({ type: "YSC_LOCAL_IMAGE_CHANGED" }, {}, resolve));
+    capturedPanel = root.querySelector("#ysc-panel");
+    assert.equal(capturedPanel.querySelector("#ysc-local-image-path").textContent, "C:\\Images\\Catalog\\VIYAR");
+    assert.equal(capturedPanel.querySelector("#ysc-value-article").value, "190218-local", "Returning from folder settings keeps manual edits");
+    assert.equal(copied.length, copiesBeforeReturn, "Returning updates the panel without triggering copy-and-close");
+    await capturedPanel.querySelector("#ysc-local-image-folder").onclick();
+    assert.equal(localImageMessages.at(-1).type, "YSC_LOCAL_IMAGE_SETTINGS");
+    const preferencesBeforeImageExport = structuredClone(stored), copiesBeforeImageExport = copied.length;
+    const setImageColumn = async (column, value) => {
+      const field = root.querySelector(`#ysc-excel-column-${column}`); field.value = value; await field.onchange();
+    };
+    await setImageColumn("A", "imageUrl"); await setImageColumn("D", "imageFormula");
+    const savedPath = "C:\\Images\\Catalog\\VIYAR\\Product.jpg";
+    assert.deepEqual(root.querySelectorAll(".ysc-preview-data").map(cell => cell.textContent), [savedPath, `=IMAGE("${savedPath}")`]);
+    const imageOption = root.querySelector("#ysc-excel-column-A").children.find(option => option.value === "imageUrl");
+    assert.equal(imageOption.textContent, "Шлях до локального зображення");
+    await root.querySelector("#ysc-copy").onclick();
+    assert.equal(copied.at(-1), savedPath, "A local screenshot copies even when no website image URL was found");
+    root.querySelector("#ysc-settings").open = false;
+    await root.querySelector("#ysc-copy").onclick();
+    assert.equal(copied.at(-1), `=IMAGE("${savedPath}")`, "The image formula uses the same saved file");
+    stored = preferencesBeforeImageExport; copied.length = copiesBeforeImageExport;
+    capturedPanel.remove();
+    delete stored.ysc_local_image_settings; delete stored.ysc_local_image_folder_name;
+  }
+  product.imageUrl = originalImage; product.candidates.imageUrl = originalImages;
+  console.log("Missing-image message, manual picker, cancellation and keyboard access passed");
   listener({ type: "YSC_CONFIGURE" }); await settle();
   let panel = root.querySelector("#ysc-panel");
   assert.equal(panel.lang, "uk");
+  assert.ok(panel.querySelector("#ysc-pick-local-image"), "Local capture also exists when online images are detected");
   assert.equal(panel.querySelectorAll("#ysc-excel-settings").length, 1, "Only one style layout editor exists");
   assert.equal(panel.querySelector("#ysc-style-settings").hidden, true);
   panel.querySelector("#ysc-style-edit").onclick();
@@ -61,6 +133,44 @@ const copied = [];
   assert.ok(!panel.querySelector("#ysc-settings").open, "Style editor does not open app settings");
   panel.querySelector("#ysc-style-edit").onclick();
   assert.equal(panel.querySelector("#ysc-style-settings").hidden, true);
+  const settingsMenu = panel.querySelector("#ysc-settings");
+  assert.ok(settingsMenu.children.slice(1).every(child => child.tagName === "DETAILS"), "Settings opens as a list of collapsed subsections");
+  assert.equal(settingsMenu.children[1].id, "ysc-global-settings");
+  const globals = panel.querySelector("#ysc-global-settings"), localSettings = panel.querySelector("#ysc-local-image-settings"), profiles = panel.querySelector("#ysc-profiles");
+  assert.equal(globals.querySelector("summary").textContent, "Глобальні");
+  assert.ok(globals.querySelector("#ysc-language")); assert.ok(globals.querySelector("#ysc-accent-color"));
+  assert.ok(!globals.querySelector("#ysc-local-image-folder"));
+  assert.equal(globals.name, localSettings.name);
+  assert.notEqual(globals.name, settingsMenu.name, "Opening a subsection must not close its ancestor");
+  settingsMenu.open = true;
+  const openSection = section => { section.open = true; section.listeners.toggle({ target: section }); };
+  openSection(globals); openSection(localSettings);
+  assert.equal(globals.open, false); assert.equal(settingsMenu.open, true);
+  const scrollBody = panel.querySelector(".ysc-body");
+  scrollBody.scrollTop = 100;
+  scrollBody.getBoundingClientRect = () => ({ bottom: 800 });
+  localSettings.getBoundingClientRect = () => ({ bottom: 1200 });
+  let scrollTarget;
+  scrollBody.scrollTo = options => { scrollTarget = options; };
+  scrollFrames.splice(0).forEach(callback => callback());
+  assert.equal(scrollTarget.top, 508, "Opening a settings subsection scrolls its last line into the panel viewport");
+  assert.equal(scrollTarget.behavior, "smooth");
+  openSection(profiles); assert.equal(localSettings.open, false);
+  const nestedTools = panel.querySelector("#ysc-profile-tools"); openSection(nestedTools);
+  assert.equal(profiles.open, true, "Nested settings keep their parent open");
+  await settle();
+  assert.ok(stored.ysc_settings_sections.includes("ysc-profiles"));
+  assert.ok(!stored.ysc_settings_sections.includes("ysc-profile-tools"), "Only the main settings subsection is remembered");
+  settingsMenu.open = false; settingsMenu.listeners.toggle({ target: settingsMenu });
+  profiles.open = false;
+  openSection(settingsMenu);
+  assert.equal(profiles.open, true, "Reopening all settings restores the last active subsection");
+  assert.equal(nestedTools.open, false, "Reopening all settings keeps administrative subsections collapsed");
+  openSection(nestedTools);
+  profiles.open = false; openSection(profiles);
+  assert.equal(nestedTools.open, false, "Reopening a parent never automatically expands nested sections");
+  assert.equal(globals.open, false, "Restoration keeps the accordion exclusive");
+  nestedTools.open = false; profiles.open = false; settingsMenu.open = false;
   const accent = panel.querySelector("#ysc-accent-color"); accent.value = "#9933cc"; await accent.onchange();
   panel = root.querySelector("#ysc-panel");
   assert.equal(stored.ysc_accent_color, "#9933cc");
@@ -73,11 +183,43 @@ const copied = [];
   const imageStage = panel.querySelector(".ysc-product-image-stage");
   assert.match(imageStage.style["--ysc-product-image"], /two\.jpg/);
   assert.equal(imageStage.style["--ysc-image-overlay-opacity"], "50%");
+  await panel.querySelector("#ysc-pick-local-image").onclick();
+  await context.YSCPicker.regionCallback({ rect: { x: 10, y: 20, width: 100, height: 80 }, viewport: { width: 800, height: 600 } });
+  panel = root.querySelector("#ysc-panel");
+  assert.equal(panel.querySelector("#ysc-excel-column-A").children.find(option => option.value === "imageUrl").textContent, "Шлях до локального зображення");
+  panel.querySelector("#ysc-image-next").onclick(); panel = root.querySelector("#ysc-panel");
+  assert.equal(panel.querySelector("#ysc-excel-column-A").children.find(option => option.value === "imageUrl").textContent, "URL зображення товару", "Selecting a website image clears the local export source");
+  panel.querySelector("#ysc-settings").open = true;
+  openSection(panel.querySelector("#ysc-global-settings"));
+  assert.equal(panel.querySelector("#ysc-help-mode").children.find(option => option.selected).value, "novice");
+  assert.ok(panel.querySelectorAll(".ysc-explanation").length > 10, "Beginner mode adds contextual explanations to settings controls");
+  assert.ok(panel.querySelectorAll(".ysc-explanation").every(hint => !hint.hidden));
+  const editedName = panel.querySelector("#ysc-value-name"); editedName.value = "Гвинт цинк — вручну"; editedName.listeners.input();
+  let modeSelect = panel.querySelector("#ysc-help-mode"); modeSelect.value = "pro"; await modeSelect.onchange();
+  panel = root.querySelector("#ysc-panel");
+  assert.equal(stored.ysc_help_mode, "pro");
+  assert.ok(panel.querySelectorAll(".ysc-explanation").every(hint => hint.hidden), "Pro hides the extended explanations");
+  assert.equal(panel.querySelector(".ysc-excel-session-hint").hidden, true, "Pro hides existing copy guidance too");
+  assert.equal(panel.querySelector("#ysc-help-description").hidden, true);
+  assert.equal(panel.querySelector("#ysc-value-name").value, "Гвинт цинк — вручну", "Help mode does not reparse or discard manual corrections");
+  assert.ok(panel.querySelector(".ysc-excel-steps").querySelector("button"), "Copy actions remain available in Pro");
+  assert.ok(panel.querySelector("#ysc-local-image-path"), "The effective local path remains available in Pro");
+  const blacklistArea = panel.querySelector("#ysc-blacklist").querySelector("textarea");
+  blacklistArea.value = Array.from({ length: 101 }, (_, index) => `phrase-${index}`).join("\n"); await blacklistArea.oninput();
+  assert.equal(panel.querySelector("#ysc-blacklist-status").hidden, false, "Pro must still show validation errors");
+  assert.match(panel.querySelector("#ysc-blacklist-status").textContent, /100/);
+  panel.remove(); listener({ type: "YSC_CONFIGURE" }); await settle(); panel = root.querySelector("#ysc-panel");
+  assert.equal(panel.querySelector("#ysc-help-mode").children.find(option => option.selected).value, "pro", "Help mode survives reopening the panel");
+  modeSelect = panel.querySelector("#ysc-help-mode"); modeSelect.value = "novice"; await modeSelect.onchange(); panel = root.querySelector("#ysc-panel");
+  assert.equal(stored.ysc_help_mode, "novice");
+  assert.ok(panel.querySelectorAll(".ysc-explanation").every(hint => !hint.hidden));
+  assert.equal(panel.querySelector(".ysc-excel-session-hint").hidden, false);
+  console.log("Beginner/Pro: contextual and existing hints, persistent global choice and manual-data preservation passed");
   const help = panel.querySelector("#ysc-help");
   assert.equal(panel.querySelector("#ysc-settings").children.at(-1), help);
   assert.equal(help.querySelector("#ysc-help-name").textContent, "Y Supplier Clipboard");
   assert.match(help.querySelector("#ysc-help-description").textContent, /буфер обміну постачальника/);
-  assert.equal(help.querySelector("#ysc-revision-date").textContent, "Дата редакції: 14.10.2026");
+  assert.equal(help.querySelector("#ysc-revision-date").textContent, "Дата редакції: 15.10.2026");
   assert.equal(help.querySelector("#ysc-code-version").textContent, `Версія коду: ${JSON.parse(fs.readFileSync("manifest.json", "utf8")).version}`);
   assert.deepEqual(help.querySelectorAll("a").map(a => a.href), ["chrome-extension://test/ui/help.html?doc=readme", "chrome-extension://test/ui/help.html?doc=license", "https://web.telegram.org/a/#-1001323392064_1018"]);
   const checkUpdate = help.querySelector("#ysc-check-update");
@@ -92,21 +234,25 @@ const copied = [];
   assert.equal(panel.querySelectorAll("#ysc-update-banner").length, 1, "Repeated checks do not duplicate the banner");
   availableUpdate = null;
   panel.querySelector("#ysc-settings").open = true;
+  openSection(panel.querySelector("#ysc-global-settings"));
   const article = panel.querySelector("#ysc-value-article"); article.value = "190218-corrected"; article.listeners.input();
   let select = panel.querySelector("#ysc-language"); select.value = "en"; await select.onchange();
   panel = root.querySelector("#ysc-panel");
   assert.equal(panel.lang, "en");
-  assert.equal(panel.querySelector("#ysc-revision-date").textContent, "Revision date: 14.10.2026");
+  assert.equal(panel.querySelector("#ysc-revision-date").textContent, "Revision date: 15.10.2026");
   assert.equal(panel.querySelector("#ysc-copy").textContent, "Copy → A");
   assert.equal(panel.querySelector("#ysc-value-article").value, "190218-corrected");
   assert.equal(panel.querySelector("#ysc-value-name").value, "Гвинт цинк");
   assert.equal(panel.querySelector("#ysc-settings").open, true);
+  assert.equal(panel.querySelector("#ysc-global-settings").open, true, "Changing language keeps the active settings subsection open");
+  assert.equal(panel.querySelector("#ysc-local-image-settings").open, false);
   assert.equal(stored.ysc_language, "en");
   select = panel.querySelector("#ysc-language"); select.value = "ru"; await select.onchange();
   assert.equal(root.querySelector("#ysc-copy").textContent, "Скопировать → A");
   root.querySelector("#ysc-panel").remove();
   listener({ type: "YSC_CONFIGURE" }); await settle();
   assert.equal(root.querySelector("#ysc-panel").lang, "ru");
+  assert.equal(root.querySelector("#ysc-global-settings").open, true, "Recreating the panel restores the stored settings subsection");
   assert.equal(root.querySelector("#ysc-language").children.find(option => option.selected).value, "ru");
   console.log("Panel language switching, persisted preference and manual edits passed");
   assert.deepEqual(root.querySelector("#ysc-language").children.map(option => option.value), ["uk", "en", "ru", "de", "pl", "et", "lv"]);

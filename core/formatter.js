@@ -94,7 +94,8 @@ globalThis.YSCFormatter = (() => {
       return /^[=+@-]/.test(value.trimStart()) ? `'${value}` : value;
     }
     const formatting = { ...defaults, ...options };
-    const imageFormula = `=IMAGE("${String(fields.imageUrl || "").replace(/"/g, '""')}")`;
+    const imageSource = fields.localImagePath || fields.imageUrl || "";
+    const imageFormula = `=IMAGE("${String(imageSource).replace(/"/g, '""')}")`;
     const values = {
       fullName: () => format(fields, { ...options, excel: false }),
       supplier: () => { const value = clean(fields.supplier, formatting); return formatting.uppercaseSupplier ? value.toUpperCase() : value; },
@@ -102,13 +103,14 @@ globalThis.YSCFormatter = (() => {
       unit: () => sheetUnit(fields, options), plainUnit: () => fields.unit,
       price: () => priceNumber(fields.price).replace(".", ","), url: () => fields.url,
       currency: () => fields.currency,
-      imageUrl: () => options.excelImageFormula ? imageFormula : fields.imageUrl,
+      imageUrl: () => options.excelImageFormula ? imageFormula : imageSource,
       imageFormula: () => imageFormula,
       sheetLength: () => dimensionMetres(fields.sheetLength, options.sheetInputUnit || "mm"),
       sheetWidth: () => dimensionMetres(fields.sheetWidth, options.sheetInputUnit || "mm"),
       sheetThickness: () => thicknessMm(fields.sheetThickness), sheetSize: () => sheetSize(fields, options)
     };
-    const value = String(values[key]?.() ?? "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
+    const raw = String(values[key]?.() ?? "").replace(/[\u0000-\u001f\u007f]/g, " ");
+    const value = (fields.localImagePath && ["imageUrl", "imageFormula"].includes(key) ? raw : raw.replace(/\s+/g, " ")).trim();
     return key === "imageFormula" || key === "imageUrl" && options.excelImageFormula ? value : /^[=+@-]/.test(value) ? `'${value}` : value;
   }
   function excelBlocks(fields, options = {}) {

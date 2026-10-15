@@ -44,13 +44,16 @@
 #ysc-panel h3 { font-size:14px; margin:10px 0 4px; }
 #ysc-panel label { display:block; margin:7px 0 3px; font-weight:400; color:var(--ysc-text); }
 #ysc-panel summary, #ysc-panel p, #ysc-panel span { color:var(--ysc-text); }
-#ysc-panel input,#ysc-panel select,#ysc-panel textarea {
+#ysc-panel input,#ysc-panel select,#ysc-panel textarea,#ysc-panel #ysc-local-image-path {
   width:100%; padding:7px; border:1px solid var(--ysc-input-border); border-radius:6px;
   background:transparent; color:var(--ysc-control-text); caret-color:var(--ysc-control-text); font:inherit;
 }
 #ysc-panel input::placeholder,#ysc-panel textarea::placeholder { color:var(--ysc-control-text); opacity:.72; }
 #ysc-panel input[type="range"] { accent-color:var(--ysc-accent); }
 #ysc-panel .ysc-image-settings { border-top:1px solid var(--ysc-border); margin-top:10px; padding-top:8px; }
+#ysc-panel .ysc-help-note { overflow-wrap:anywhere; }
+#ysc-panel .ysc-explanation { margin:5px 0 9px; color:var(--ysc-text); font-size:12px; line-height:1.4; overflow-wrap:anywhere; }
+#ysc-panel #ysc-local-image-path { min-height:35px; white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; user-select:text; cursor:text; }
 #ysc-panel .ysc-compact-setting { display:grid; grid-template-columns:minmax(0,1fr) minmax(115px, 1fr); gap:8px; align-items:center; }
 #ysc-panel .ysc-compact-setting label { margin:0; }
 #ysc-panel .ysc-image-settings .ysc-compact-setting label { font-size:12px; }
@@ -76,10 +79,13 @@
 #ysc-panel .ysc-pricing { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 #ysc-panel .ysc-price-row { grid-template-columns:minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,.7fr); align-items:end; }
 #ysc-panel .ysc-data-divider { border:0; border-top:1px solid var(--ysc-border); margin:10px 0 8px; }
-#ysc-panel .ysc-image-switch { position:relative; display:flex; align-items:center; justify-content:center; gap:10px; margin:8px 0; padding:5px 38px 5px 9px; border:1px solid var(--ysc-accent); border-radius:5px; color:var(--ysc-accent); font-size:12px; }
+#ysc-panel .ysc-image-switch { position:relative; display:flex; align-items:center; justify-content:center; gap:10px; min-height:32px; margin:8px 0; padding:5px 68px 5px 9px; border:1px solid var(--ysc-accent); border-radius:5px; color:var(--ysc-accent); font-size:12px; }
 #ysc-panel .ysc-image-switch .ysc-image-nav,#ysc-panel .ysc-image-switch #ysc-image-choice,#ysc-panel .ysc-image-pick { color:var(--ysc-accent); }
 #ysc-panel .ysc-image-switch .ysc-image-nav,#ysc-panel .ysc-image-pick { display:grid; place-items:center; min-width:14px; cursor:pointer; font-weight:700; font-size:16px; line-height:1; }
 #ysc-panel .ysc-image-pick { position:absolute; right:4px; top:50%; width:26px; height:26px; transform:translateY(-50%); }
+#ysc-panel #ysc-pick-image { right:34px; }
+#ysc-panel .ysc-capture-square { position:absolute; top:4px; right:2px; width:11px; height:10px; border:1.5px solid var(--ysc-accent); border-radius:1px; }
+#ysc-panel .ysc-local-image-pick .ysc-cursor-icon { position:absolute; left:3px; bottom:3px; }
 #ysc-panel .ysc-image-switch .ysc-image-nav:focus-visible,#ysc-panel .ysc-image-pick:focus-visible { outline:2px solid var(--ysc-accent); outline-offset:2px; }
 #ysc-panel .ysc-pricing > div { min-width:0; display:flex; flex-direction:column; }
 #ysc-panel .ysc-sheet-meta { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; align-items:end; }

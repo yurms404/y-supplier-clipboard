@@ -1,0 +1,269 @@
+Option Explicit
+
+' Y Supplier Clipboard - EXPERIMENTAL Excel VBA module, Windows desktop.
+' .qvb is plain source text: paste into a standard module in the VBA editor.
+' No Auto_Open/Workbook_Open handlers, downloads, shell commands or Evaluate.
+' Original marker cells are kept. Results go one column to the right.
+' Native in-cell insertion is late-bound and MUST be tested on your Excel build.
+
+Private Const YSC_TARGET_OFFSET As Long = 1
+Private Const YSC_MAX_CELLS As Long = 10000
+Private Const YSC_MAX_REPORTED_ERRORS As Long = 5
+Private Const YSC_PADDING As Double = 2
+
+Public Sub YSC_InsertLocalImages()
+    YSC_RunBatch True
+End Sub
+
+Public Sub YSC_InsertLocalImagesOverCells()
+    ' Explicit compatibility mode: these are Shapes, NOT true cell values.
+    YSC_RunBatch False
+End Sub
+
+Private Sub YSC_RunBatch(ByVal nativeInCell As Boolean)
+    Dim originalSelection As Range, sourceRange As Range, sourceCell As Range
+    Dim sheet As Worksheet, fileSystem As Object
+    Dim previousScreen As Boolean, previousEvents As Boolean, previousStatus As Variant
+    Dim inserted As Long, skipped As Long, failed As Long, visited As Long
+    Dim path As String, reason As String, issues As String, fatalMessage As String
+    Dim summary As String
+
+    If TypeName(Selection) <> "Range" Then
+        MsgBox "Select cells containing local paths or =IMAGE(""path"") markers.", vbInformation, "YSC local images"
+        Exit Sub
+    End If
+    Set originalSelection = Selection
+    Set sheet = originalSelection.Worksheet
+    If sheet.ProtectContents Or sheet.ProtectDrawingObjects Then
+        MsgBox "This worksheet is protected. Use an unprotected test copy.", vbExclamation, "YSC local images"
+        Exit Sub
+    End If
+    Set sourceRange = Application.Intersect(originalSelection, sheet.UsedRange)
+    If sourceRange Is Nothing Then Exit Sub
+    If sourceRange.Cells.CountLarge > YSC_MAX_CELLS Then
+        MsgBox "Select at most " & YSC_MAX_CELLS & " source cells, not an entire populated sheet.", vbInformation, "YSC local images"
+        Exit Sub
+    End If
+
+    previousScreen = Application.ScreenUpdating
+    previousEvents = Application.EnableEvents
+    previousStatus = Application.StatusBar
+    On Error GoTo Fatal
+    Set fileSystem = CreateObject("Scripting.FileSystemObject")
+    Application.ScreenUpdating = False
+    Application.EnableEvents = False
+
+    For Each sourceCell In sourceRange.Cells
+        visited = visited + 1
+        Application.StatusBar = "YSC local images: " & visited & " / " & sourceRange.Cells.CountLarge
+        reason = vbNullString
+        path = YSC_PathFromCell(sourceCell)
+        If Len(path) = 0 Then
+            skipped = skipped + 1
+        ElseIf YSC_InsertOne(sourceCell, originalSelection, fileSystem, path, nativeInCell, reason) Then
+            inserted = inserted + 1
+        Else
+            failed = failed + 1
+            If failed <= YSC_MAX_REPORTED_ERRORS Then
+                issues = issues & vbCrLf & sourceCell.Address(False, False) & ": " & Left$(reason, 140)
+            End If
+        End If
+    Next sourceCell
+    GoTo CleanUp
+
+Fatal:
+    fatalMessage = Err.Description
+CleanUp:
+    On Error Resume Next
+    sheet.Activate
+    originalSelection.Select
+    Application.StatusBar = previousStatus
+    Application.EnableEvents = previousEvents
+    Application.ScreenUpdating = previousScreen
+    On Error GoTo 0
+
+    summary = "Inserted: " & inserted & vbCrLf & "Skipped (not a local image marker): " & skipped & vbCrLf & "Not inserted: " & failed
+    If nativeInCell Then
+        summary = summary & vbCrLf & "Mode: native picture in cell (experimental)."
+    Else
+        summary = summary & vbCrLf & "Mode: embedded picture OVER a cell."
+    End If
+    If Len(issues) > 0 Then summary = summary & vbCrLf & "First issues:" & issues
+    If Len(fatalMessage) > 0 Then summary = summary & vbCrLf & "Stopped: " & fatalMessage
+    MsgBox summary, vbInformation, "YSC local images"
+End Sub
+
+Private Function YSC_PathFromCell(ByVal cell As Range) As String
+    On Error GoTo NoPath
+    If cell.MergeCells Then Exit Function
+    If cell.HasFormula Then
+        ' Read the formula text even if IMAGE currently evaluates to #VALUE!/#NAME?.
+        YSC_PathFromCell = YSC_ParseLocalPath(CStr(cell.Formula))
+    ElseIf Not IsError(cell.Value2) Then
+        YSC_PathFromCell = YSC_ParseLocalPath(CStr(cell.Value2))
+    End If
+NoPath:
+End Function
+
+Private Function YSC_ParseLocalPath(ByVal marker As String) As String
+    Dim text As String, functionName As String, result As String
+    Dim position As Long, opening As Long, length As Long, character As String
+    Dim closedQuote As Boolean
+
+    text = Trim$(marker)
+    If Left$(text, 1) = "'" Then text = Trim$(Mid$(text, 2))
+    If Left$(text, 1) = "=" Then
+        opening = InStr(1, text, "(", vbBinaryCompare)
+        If opening = 0 Then Exit Function
+        functionName = UCase$(Trim$(Mid$(text, 2, opening - 2)))
+        functionName = Replace(functionName, "_XLFN.", vbNullString)
+        functionName = Replace(functionName, "_XLWS.", vbNullString)
+        If Left$(functionName, 1) = "@" Then functionName = Mid$(functionName, 2)
+        If functionName <> "IMAGE" Then Exit Function
+        position = opening + 1
+        length = Len(text)
+        Do While position <= length And Mid$(text, position, 1) = " "
+            position = position + 1
+        Loop
+        If Mid$(text, position, 1) <> Chr$(34) Then Exit Function
+        position = position + 1
+        Do While position <= length
+            character = Mid$(text, position, 1)
+            If character = Chr$(34) Then
+                If Mid$(text, position + 1, 1) = Chr$(34) Then
+                    result = result & Chr$(34)
+                    position = position + 2
+                Else
+                    closedQuote = True
+                    position = position + 1
+                    Exit Do
+                End If
+            Else
+                result = result & character
+                position = position + 1
+            End If
+        Loop
+        If Not closedQuote Then Exit Function
+        text = Trim$(Mid$(text, position))
+        ' Accept only the single-argument marker produced by the extension.
+        If text <> ")" Then Exit Function
+        text = result
+    Else
+        If Len(text) >= 2 Then
+            If Left$(text, 1) = Chr$(34) And Right$(text, 1) = Chr$(34) Then text = Mid$(text, 2, Len(text) - 2)
+        End If
+    End If
+    If InStr(1, text, "://", vbTextCompare) > 0 Then Exit Function
+    text = Replace(text, "/", "\")
+    If Not YSC_IsAbsolutePath(text) Then Exit Function
+    If InStr(text, vbCr) > 0 Or InStr(text, vbLf) > 0 Or InStr(text, vbTab) > 0 Then Exit Function
+    YSC_ParseLocalPath = text
+End Function
+
+Private Function YSC_IsAbsolutePath(ByVal path As String) As Boolean
+    If Len(path) >= 3 Then
+        If Left$(path, 1) Like "[A-Za-z]" And Mid$(path, 2, 2) = ":\" Then
+            YSC_IsAbsolutePath = True
+            Exit Function
+        End If
+    End If
+    If Left$(path, 2) = "\\" And InStr(3, path, "\") > 3 Then YSC_IsAbsolutePath = True
+End Function
+
+Private Function YSC_InsertOne(ByVal source As Range, ByVal sourceSelection As Range, ByVal fileSystem As Object, ByVal path As String, ByVal nativeInCell As Boolean, ByRef reason As String) As Boolean
+    Dim target As Range, occupiedSource As Range, picture As Shape, existing As Shape
+    Dim nativeTarget As Object, availableWidth As Double, availableHeight As Double
+    Dim ratio As Double, nativeAttempt As Boolean, errorText As String
+    On Error GoTo Failed
+
+    If source.Column + YSC_TARGET_OFFSET < 1 Or source.Column + YSC_TARGET_OFFSET > source.Worksheet.Columns.Count Then
+        reason = "No destination column available.": Exit Function
+    End If
+    Set target = source.Offset(0, YSC_TARGET_OFFSET)
+    Set occupiedSource = Application.Intersect(target, sourceSelection)
+    If Not occupiedSource Is Nothing Then
+        reason = "Destination belongs to the source selection; select only the marker column.": Exit Function
+    End If
+    If target.MergeCells Or source.MergeCells Then
+        reason = "Merged cells are not supported.": Exit Function
+    End If
+    If Application.WorksheetFunction.CountA(target) <> 0 Then
+        reason = "Destination is not empty; nothing was overwritten.": Exit Function
+    End If
+    availableWidth = target.Width - YSC_PADDING * 2
+    availableHeight = target.Height - YSC_PADDING * 2
+    If availableWidth <= 0 Or availableHeight <= 0 Then
+        reason = "Destination is hidden or too small.": Exit Function
+    End If
+    For Each existing In target.Worksheet.Shapes
+        If existing.Left < target.Left + target.Width And existing.Left + existing.Width > target.Left And existing.Top < target.Top + target.Height And existing.Top + existing.Height > target.Top Then
+            reason = "A drawing already overlaps the destination; nothing was replaced.": Exit Function
+        End If
+    Next existing
+    If Not fileSystem.FileExists(path) Then
+        reason = "File not found: " & path: Exit Function
+    End If
+
+    If nativeInCell Then
+        ' Availability varies by Excel version/build; avoid an early-bound dependency.
+        target.Activate
+        Set nativeTarget = target
+        nativeAttempt = True
+        CallByName nativeTarget, "InsertPictureInCell", VbMethod, path
+        nativeAttempt = False
+    Else
+        Set picture = target.Worksheet.Shapes.AddPicture( _
+            Filename:=path, LinkToFile:=msoFalse, SaveWithDocument:=msoTrue, _
+            Left:=target.Left, Top:=target.Top, Width:=-1, Height:=-1)
+        picture.LockAspectRatio = msoTrue
+        ratio = availableWidth / picture.Width
+        If availableHeight / picture.Height < ratio Then ratio = availableHeight / picture.Height
+        picture.Width = picture.Width * ratio
+        picture.Left = target.Left + (target.Width - picture.Width) / 2
+        picture.Top = target.Top + (target.Height - picture.Height) / 2
+        picture.Placement = xlMoveAndSize
+        picture.AlternativeText = "YSC local image from " & source.Address(False, False)
+    End If
+    YSC_InsertOne = True
+    Exit Function
+Failed:
+    errorText = Err.Description
+    On Error Resume Next
+    If Not picture Is Nothing Then picture.Delete
+    ' The destination was verified empty before the native attempt.
+    If nativeAttempt Then target.ClearContents
+    On Error GoTo 0
+    If nativeAttempt Then
+        reason = "Native in-cell insertion failed. Try YSC_InsertLocalImagesOverCells. " & errorText
+    Else
+        reason = errorText
+    End If
+End Function
+
+Public Sub YSC_TestImageMarkers()
+    ' Parser-only tests: no files are read and no cells are changed.
+    Dim quote As String, path As String
+    quote = Chr$(34)
+    path = "C:\Product  images\Supplier\Sample (1).jpg"
+    YSC_AssertPath path, path
+    YSC_AssertPath "=IMAGE(" & quote & path & quote & ")", path
+    YSC_AssertPath "'=IMAGE(" & quote & path & quote & ")", path
+    YSC_AssertPath "=_xlfn.IMAGE(" & quote & path & quote & ")", path
+    YSC_AssertPath "=@_xlfn.IMAGE(" & quote & path & quote & ")", path
+    YSC_AssertPath "=_xlfn._xlws.IMAGE(" & quote & path & quote & ")", path
+    path = "C:\Images\" & ChrW(&H422) & ChrW(&H435) & ChrW(&H441) & ChrW(&H442) & ".jpg"
+    YSC_AssertPath "=IMAGE(" & quote & path & quote & ")", path
+    YSC_AssertPath "=IMAGE(" & quote & "\\server\share\image.jpg" & quote & ")", "\\server\share\image.jpg"
+    YSC_AssertPath "=IMAGE(" & quote & "https://example.com/image.jpg" & quote & ")", vbNullString
+    YSC_AssertPath "=IMAGE(A1)", vbNullString
+    YSC_AssertPath "=IMAGE(" & quote & path & quote, vbNullString
+    YSC_AssertPath "folder\image.jpg", vbNullString
+    YSC_AssertPath "=SUM(1,2)", vbNullString
+    MsgBox "Marker parser tests passed. Image insertion still needs testing on your Excel build.", vbInformation, "YSC parser tests"
+End Sub
+
+Private Sub YSC_AssertPath(ByVal marker As String, ByVal expected As String)
+    If StrComp(YSC_ParseLocalPath(marker), expected, vbBinaryCompare) <> 0 Then
+        Err.Raise vbObjectError + 710, "YSC_TestImageMarkers", "Parser test failed: " & marker
+    End If
+End Sub
