@@ -58,13 +58,21 @@ globalThis.YSCParser = (() => {
     for (const node of el.querySelectorAll?.('[itemprop="priceCurrency"], [data-currency], [data-price-currency]') || []) values.push(node.getAttribute?.("content"), node.getAttribute?.("data-currency"), node.getAttribute?.("data-price-currency"), text(node));
     return code(values.filter(Boolean).join(" "));
   }
-  function unitFromPrice(value) { return String(value || "").match(/(?:грн\.?|₴|UAH)\s*\/\s*([\p{L}\d²³.\-–—−]+(?:\s*м)?)/iu)?.[1] || ""; }
+  // Catalogues often glue the buy button to the unit inside one price node ("15 371.70₴ / листКупити"), and the
+  // captured text then carries the button. A unit is one word, so it is cut at the spot where a second word
+  // starts; an all-uppercase unit like "ШТ" has no such spot and survives untouched.
+  function unitWord(value) {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    const glued = text.search(/[\p{Ll}\d]\p{Lu}/u);
+    return (glued > 0 ? text.slice(0, glued + 1) : text).slice(0, 20);
+  }
+  function unitFromPrice(value) { return unitWord(String(value || "").match(/(?:грн\.?|₴|UAH)\s*\/\s*([\p{L}\d²³.\-–—−]+(?:\s*м)?)/iu)?.[1] || ""); }
   function sourceValue(rule, field, data) {
     if (!rule || !rule.enabled) return "";
     if (rule.source === "manual" || rule.source === "fixed") return field === "imageUrl" ? imageUrl(rule.value) : rule.value || "";
     if (rule.source === "url") { const value = new URL(location.href).searchParams.get(rule.value || rule.attribute || "") || ""; return field === "imageUrl" ? imageUrl(value) : value; }
     if (rule.source === "css" && field === "price") return priceText(safeQuery(rule.selector));
-    if (rule.source === "css" || rule.source === "attribute") { const el = safeQuery(rule.selector); const value = rule.source === "attribute" ? el?.getAttribute(rule.attribute || "") || "" : field.startsWith("sheet") && /^(SELECT|INPUT)$/i.test(el?.tagName || "") ? text(el.selectedOptions?.[0]) || el.value || "" : text(el); return field === "imageUrl" ? imageUrl(value) : field === "article" ? cleanArticle(value) : field === "unit" ? unitFromPrice(value) || value : value; }
+    if (rule.source === "css" || rule.source === "attribute") { const el = safeQuery(rule.selector); const value = rule.source === "attribute" ? el?.getAttribute(rule.attribute || "") || "" : field.startsWith("sheet") && /^(SELECT|INPUT)$/i.test(el?.tagName || "") ? text(el.selectedOptions?.[0]) || el.value || "" : text(el); return field === "imageUrl" ? imageUrl(value) : field === "article" ? cleanArticle(value) : field === "unit" ? unitFromPrice(value) || unitWord(value) : value; }
     if (rule.source === "regex") { try { const value = (document.body.innerText.match(new RegExp(rule.regex, "im")) || [])[1] || ""; return field === "imageUrl" ? imageUrl(value) : value; } catch (_) { return ""; } }
     if (rule.source === "jsonld") {
       if (field === "imageUrl") return imageUrl(Array.isArray(data.image) ? data.image[0] : data.image);

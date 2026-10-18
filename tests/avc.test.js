@@ -137,4 +137,21 @@ assert.equal(parser.parse({ fields: { info: { enabled: false } } }).info, "", "A
 assert.equal([...parser.extraFields].join("|"), ["usage", "kind", "info", "weight", "package"].join("|"));
 console.log("AVC palette fields: usage from the unit, manual override, jsonld rule and disabled field passed");
 
+// 8. A catalogue often glues its buy button to the unit inside the same price node, which used to leak into the panel.
+let priceNodeText = "15 371.70₴ / листКупити";
+context.document.querySelectorAll = selector => selector.includes("price")
+  ? [{ textContent: priceNodeText, getAttribute: () => null, querySelectorAll: () => [] }] : [];
+assert.equal(parser.parse().unit, "лист", "The buy button glued to the unit is cut away");
+assert.equal(parser.parse().usage, "Sheet", "The cleaned unit still chooses the type");
+priceNodeText = "657.00 ₴ / м2Купити частинами";
+assert.equal(parser.parse().unit, "м2", "A glued label after a digit is cut away too");
+priceNodeText = "657.00 ₴ / ШТ";
+assert.equal(parser.parse().unit, "ШТ", "An all-uppercase unit is left alone");
+priceNodeText = "657.00 ₴ / пог.м";
+assert.equal(parser.parse().unit, "пог.м", "A plain unit is left untouched");
+priceNodeText = "657.00 ₴ / м.кв.";
+assert.equal(parser.parse().unit, "м.кв.", "A dotted unit survives the cleanup");
+assert.equal(parser.parse().usage, "Sheet", "A dotted square metre is recognised");
+console.log("AVC unit cleanup: a glued buy button is cut from the unit, uppercase and plain units survive");
+
 console.log("A>V>C> property palette import compatibility passed");
