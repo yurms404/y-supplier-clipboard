@@ -76,6 +76,7 @@
   "supplier": "Поставщик",
   "article_sku": "Артикул",
   "product_name": "Название товара",
+  "avc_name": "Название для A>V>C>",
   "price": "Цена",
   "unit": "Единица",
   "unit_of_measure": "Единица измерения",

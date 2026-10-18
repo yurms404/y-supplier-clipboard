@@ -76,6 +76,7 @@
   "supplier": "Tarnija",
   "article_sku": "Tootekood / SKU",
   "product_name": "Toote nimi",
+  "avc_name": "Nimi A>V>C> jaoks",
   "price": "Hind",
   "unit": "Ühik",
   "unit_of_measure": "Mõõtühik",

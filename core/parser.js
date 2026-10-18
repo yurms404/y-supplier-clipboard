@@ -146,11 +146,16 @@ globalThis.YSCParser = (() => {
     const hostnameSupplier = hostnameParts[0]?.toLowerCase() === "www" ? hostnameParts[1] : hostnameParts[0];
     const configuredSupplier = /^www$/i.test(String(profile.supplier || "").trim()) ? "" : profile.supplier;
     const supplier = removeBlocked(configuredSupplier || sourceValue(fields.supplier, "supplier", product) || hostnameSupplier, profile.blacklist);
-    // AVC palette fields. Usage follows the sheet/rod mode unless a rule overrides it.
+    // AVC palette fields. Usage follows the unit of measure first, then the sheet/rod mode, unless a rule overrides it.
     const extras = Object.fromEntries(extraFields.map(key => {
       const rule = { enabled: true, selector: "", regex: "", attribute: "", value: "", ...(fields[key] || {}) };
       if (!rule.enabled) return [key, ""];
-      if (key === "usage" && (!rule.source || rule.source === "auto")) return [key, profile.format?.sheet ? (profile.format.sheetRod ? "Rod" : "Sheet") : "Item"];
+      if (key === "usage" && (!rule.source || rule.source === "auto")) {
+        const detected = YSCFormatter.usages[YSCFormatter.detectUsage(unit)];
+        const byMode = profile.format?.sheet ? (profile.format.sheetRod ? "Rod" : "Sheet") : "Item";
+        // A unit that says nothing (pieces, packages) leaves the decision to the sheet or rod mode of the domain.
+        return [key, detected === "Item" ? byMode : detected];
+      }
       // Automatic detection for the palette fields reads the product metadata, where shops keep the description and the category.
       const source = !rule.source || rule.source === "auto" ? "jsonld" : rule.source;
       return [key, removeBlocked(sourceValue({ ...rule, source }, key, product), profile.blacklist)];

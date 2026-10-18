@@ -1,6 +1,18 @@
 /* Pure formatter; exposed for both extension and tests. */
 globalThis.YSCFormatter = (() => {
   const defaults = { supplier: true, article: true, name: true, replaceComma: true, normalizeSpaces: true, stripControls: true, uppercaseSupplier: true, decimalDot: false, dimensionUnits: false, dimensionInMillimetres: false, optionalDimensions: false };
+  // A>V>C> usage codes. The order is the receiver's own enum and must not be reshuffled.
+  const usages = ["Volume", "Sheet", "Rod", "Cover", "Banding", "Item"];
+  // The unit of measure is the best hint about how the receiver should cost the position.
+  function detectUsage(unit) {
+    const value = String(unit || "").toLowerCase().trim().replace(/²/g, "2").replace(/³/g, "3").replace(/[\s.\^]/g, "");
+    if (/^(?:(?:mm|cm|m|мм|см|м|ft|in)3|кубм|cbm|кубометр|кубометрів|кубометров)$/.test(value)) return 0;
+    if (/^(?:(?:mm|cm|m|мм|см|м|ft|in)2|квм|sqm|sqft|sqin|лист|листа|листи|листів|листов|sheet|sheets)$/.test(value)) return 1;
+    if (/^(?:mm|cm|m|мм|см|м|ft|in|lm|погм|пм|мп|погоннийметр|погонныйметр|хлист|хлыст|хлиста|хлыста|rod)$/.test(value)) return 2;
+    return 5; // Pieces, packages and unrecognised units use the basic Item form.
+  }
+  // A>V>C> reuses the name as a block name, so forbidden characters are replaced rather than dropped.
+  const avcName = value => String(value ?? "").replace(/[\u0000-\u001f\u007f<>/\\":;?*|,=`]/g, "-").replace(/\s+/g, " ").trim().slice(0, 255);
   function clean(value, options) {
     let text = String(value ?? "").replace(/[\u0000-\u001F\u007F]/g, " ");
     if (options.replaceComma) text = text.replace(/,/g, "-");
@@ -113,7 +125,7 @@ globalThis.YSCFormatter = (() => {
   const thicknessWithUnit = (value, options = {}) => { const millimetres = thicknessMm(value, options); return millimetres && options.dimensionUnits ? `${millimetres}mm` : millimetres; };
   const excelLayout = { name: 2, unit: 5, price: 6 };
   const columnName = column => String.fromCharCode(64 + column);
-  const excelFields = ["fullName", "supplier", "article", "name", "info", "unit", "plainUnit", "price", "pricePerUnit", "currency", "sheetLength", "sheetWidth", "sheetThickness", "sheetSize", "usage", "kind", "weight", "package", "url", "imageUrl", "imageFormula"];
+  const excelFields = ["fullName", "supplier", "article", "name", "avcName", "info", "unit", "plainUnit", "price", "pricePerUnit", "currency", "sheetLength", "sheetWidth", "sheetThickness", "sheetSize", "usage", "kind", "weight", "package", "url", "imageUrl", "imageFormula"];
   const excelJoin = "join";
   const isLiteralColumn = key => Boolean(key && typeof key === "object" && !Array.isArray(key) && typeof key.text === "string");
   function excelColumns(options = {}) {
@@ -140,6 +152,8 @@ globalThis.YSCFormatter = (() => {
       fullName: () => format(fields, { ...options, excel: false }),
       supplier: () => { const value = clean(fields.supplier, formatting); return formatting.uppercaseSupplier ? value.toUpperCase() : value; },
       article: () => clean(fields.article, formatting), name: () => clean(fields.name, formatting),
+      // The palette name is the product name alone, cleared of characters A>V>C> forbids in a block name.
+      avcName: () => avcName(clean(fields.name, formatting)),
       info: () => clean(fields.info, formatting),
       unit: () => sheetUnit(fields, options), plainUnit: () => fields.unit,
       price: () => priceValue(fields.price, options), pricePerUnit: () => decimal(unitPrice(fields, options), options), url: () => fields.url,
@@ -194,5 +208,5 @@ globalThis.YSCFormatter = (() => {
     const separator = separatorMode === "enter" ? "\r\n" : separatorMode === "space" ? " " : separatorMode === "ascii" && Number.isInteger(ascii) && ascii >= 1 && ascii <= 127 ? String.fromCharCode(ascii) : "\t";
     return groups.map(g => ({ ...g, target: g.values.length === 1 ? (vertical ? String(g.start) : columnName(g.start)) : (vertical ? `${g.start}:${g.end}` : `${columnName(g.start)}:${columnName(g.end)}`), text: g.values.join(separator) }));
   }
-  return { clean, format, formatExcel, priceNumber, priceValue, numberValue, unitPrice, decimal, currencyCode, defaults, excelLayout, excelColumns, excelFields, excelValue, excelBlocks, columnName, dimensionNumber, dimensionMetres, sheetSize, sheetUnit, thicknessMm, isLiteralColumn };
+  return { clean, format, formatExcel, priceNumber, priceValue, numberValue, unitPrice, decimal, currencyCode, defaults, usages, detectUsage, avcName, excelLayout, excelColumns, excelFields, excelValue, excelBlocks, columnName, dimensionNumber, dimensionMetres, sheetSize, sheetUnit, thicknessMm, isLiteralColumn };
 })();

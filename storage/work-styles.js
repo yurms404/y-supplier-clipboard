@@ -1,13 +1,14 @@
 globalThis.YSCWorkStyles = (() => {
   const keys = ["excel", "excelColumns", "excelSeparator", "excelAscii", "excelVertical", "excelImageFormula", ...Object.keys(YSCFormatter.defaults)];
-  // A>V>C> property palette: 14 tab separated fields in a fixed order, period decimals, commas kept in text.
-  const avcId = "avc";
-  const avcColumns = ["name", "usage", "kind", "info", "sheetLength", "sheetWidth", "sheetThickness", "supplier", "article", "pricePerUnit", "weight", "package", "url", "imageUrl"];
+  // A>V>C> property palette: 14 tab separated fields in a fixed order, period decimals, bare millimetres,
+  // and commas kept in the description. The name is sanitised by the avcName field in the formatter.
+  const avcId = "avc-import-14";
+  const avcColumns = ["avcName", "usage", "kind", "info", "sheetLength", "sheetWidth", "sheetThickness", "supplier", "article", "pricePerUnit", "weight", "package", "url", "imageUrl"];
   const avcStyle = base => ({
-    id: avcId, name: "AVC Properties",
+    id: avcId, name: "AVC · 14 полів (A:N)",
     format: normalize({
       ...base, excelColumns: avcColumns, excelSeparator: "tab", excelVertical: false, excelImageFormula: false,
-      replaceComma: false, uppercaseSupplier: false, decimalDot: true, dimensionUnits: true, dimensionInMillimetres: true, optionalDimensions: true
+      replaceComma: false, uppercaseSupplier: false, decimalDot: true, dimensionUnits: false, dimensionInMillimetres: true, optionalDimensions: true
     })
   });
   function normalize(source = {}) {
@@ -31,8 +32,8 @@ globalThis.YSCWorkStyles = (() => {
     if (Array.isArray(preferences.ysc_work_styles) && preferences.ysc_work_styles.length) {
       const stored = preferences.ysc_work_styles.map(style => ({ ...style, format: normalize(style.format) }));
       const selected = stored.some(s => s.id === preferences.ysc_work_style) ? preferences.ysc_work_style : stored.at(-1).id;
-      // The built-in AVC style is seeded for existing installs too; deleting it brings it back on the next open.
-      const styles = stored.some(s => s.id === avcId) ? stored : [...stored, avcStyle({})];
+      // The built-in AVC style is seeded once; deleting it keeps it away until the styles are cleared.
+      const styles = preferences.ysc_avc_style_added || stored.some(s => s.id === avcId) ? stored : [...stored, avcStyle({})];
       return { styles: [...styles.filter(s => s.id !== selected), styles.find(s => s.id === selected)], selected };
     }
     const common = { ...YSCFormatter.defaults, ...snapshot(format) };
@@ -42,7 +43,7 @@ globalThis.YSCWorkStyles = (() => {
     const selected = preferences.ysc_excel_mode ? "excel" : "cad";
     return { styles: [...styles.filter(s => s.id !== selected), styles.find(s => s.id === selected)], selected };
   }
-  const save = state => chrome.storage.local.set({ ysc_work_styles: structuredClone(state.styles), ysc_work_style: state.selected });
+  const save = state => chrome.storage.local.set({ ysc_work_styles: structuredClone(state.styles), ysc_work_style: state.selected, ysc_avc_style_added: true });
   function uniqueName(name, styles, exceptId) {
     const base = String(name).trim().replace(/\s*\(\d+\)$/, "").slice(0, 70);
     const used = new Set(styles.filter(s => s.id !== exceptId).map(s => s.name.toLocaleLowerCase()));

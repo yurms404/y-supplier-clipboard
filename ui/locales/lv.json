@@ -76,6 +76,7 @@
   "supplier": "Piegādātājs",
   "article_sku": "Preces kods / SKU",
   "product_name": "Preces nosaukums",
+  "avc_name": "Nosaukums A>V>C>",
   "price": "Cena",
   "unit": "Vienība",
   "unit_of_measure": "Mērvienība",

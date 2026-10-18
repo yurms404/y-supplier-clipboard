@@ -76,6 +76,7 @@
   "supplier": "Lieferant",
   "article_sku": "Artikelnummer / SKU",
   "product_name": "Produktname",
+  "avc_name": "Name für A>V>C>",
   "price": "Preis",
   "unit": "Einheit",
   "unit_of_measure": "Maßeinheit",

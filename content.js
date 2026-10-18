@@ -303,7 +303,7 @@
     }
     if (profile.format.excelVertical) settings.append(explanation("in_enter_mode_the_layout_defines_rows_1_26_instead_of_columns_a_z_pl"));
     const columns = YSCFormatter.excelColumns(profile.format);
-    const labels = { skip: t("leave_unchanged"), fullName: t("full_description"), supplier: t("supplier"), article: t("article_sku"), name: t("product_name"), info: t("avc_info"), unit: t("unit_with_dimensions"), plainUnit: t("unit_only"), price: t("price"), pricePerUnit: t("price_per_square_or_running_metre"), currency: t("currency"), sheetLength: t("length_m"), sheetWidth: t("width_m"), sheetThickness: t("thickness_mm"), sheetSize: t("sheet_size_m"), usage: t("avc_usage"), kind: t("avc_kind"), weight: t("avc_weight"), package: t("avc_package"), url: t("current_page_url"), imageUrl: t(result.localImagePath ? "local_image_export_path" : "product_image_url"), imageFormula: t(result.localImagePath ? "local_image_export_formula" : "image_image_url"), join: t("join_with_a_space") };
+    const labels = { skip: t("leave_unchanged"), fullName: t("full_description"), supplier: t("supplier"), article: t("article_sku"), name: t("product_name"), avcName: t("avc_name"), info: t("avc_info"), unit: t("unit_with_dimensions"), plainUnit: t("unit_only"), price: t("price"), pricePerUnit: t("price_per_square_or_running_metre"), currency: t("currency"), sheetLength: t("length_m"), sheetWidth: t("width_m"), sheetThickness: t("thickness_mm"), sheetSize: t("sheet_size_m"), usage: t("avc_usage"), kind: t("avc_kind"), weight: t("avc_weight"), package: t("avc_package"), url: t("current_page_url"), imageUrl: t(result.localImagePath ? "local_image_export_path" : "product_image_url"), imageFormula: t(result.localImagePath ? "local_image_export_formula" : "image_image_url"), join: t("join_with_a_space") };
     const strip = $("div", { className: "ysc-excel-row" });
     // Literal text belongs to the selected style, independently for each cell.
     labels.anyText = t("any_text");
@@ -487,7 +487,7 @@
     refresh(); return box;
   }
   const avcFieldLabels = { usage: "avc_usage", kind: "avc_kind", info: "avc_info", weight: "avc_weight", package: "avc_package" };
-  const avcUsageValues = ["Volume", "Sheet", "Rod", "Cover", "Banding", "Item"];
+  const avcUsageValues = YSCFormatter.usages;
   function avcControls() {
     const columns = YSCFormatter.excelColumns(profile.format);
     const used = Object.keys(avcFieldLabels).filter(key => columns.includes(key));
