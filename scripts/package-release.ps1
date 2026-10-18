@@ -12,7 +12,10 @@ foreach ($releaseFile in $releaseFiles) {
     Copy-Item -LiteralPath (Join-Path $releaseRoot $releaseFile) -Destination $releaseStage -Recurse
 }
 if (Test-Path -LiteralPath (Join-Path $releaseRoot 'docs')) {
-    Copy-Item -LiteralPath (Join-Path $releaseRoot 'docs') -Destination $releaseStage -Recurse
+    # Markdown only: the folder also keeps a user supplied workbook with real supplier prices.
+    $releaseDocs = Join-Path $releaseStage 'docs'
+    New-Item -ItemType Directory -Path $releaseDocs | Out-Null
+    Get-ChildItem -LiteralPath (Join-Path $releaseRoot 'docs') -Filter '*.md' -File | Copy-Item -Destination $releaseDocs
 }
 New-Item -ItemType Directory -Path (Join-Path $releaseStage 'icons') | Out-Null
 foreach ($releaseSize in @(16, 32, 48, 128)) {
