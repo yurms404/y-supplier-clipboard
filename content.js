@@ -205,7 +205,7 @@
   function rerun() { nextExcelBlock = 0; result = YSCParser.parse(profile); render(); }
   function outputFields() {
     const cleaned = { ...result, url: location.href };
-    for (const key of ["supplier", "article", "name", "unit", "price", "currency"]) cleaned[key] = YSCParser.removeBlocked(result[key], profile.blacklist);
+    for (const key of ["supplier", "brand", "article", "name", "unit", "price", "currency"]) cleaned[key] = YSCParser.removeBlocked(result[key], profile.blacklist);
     return cleaned;
   }
   function blacklistSettings() {
@@ -219,7 +219,7 @@
       profile.blacklist = entries;
       const currentRevision = ++revision;
       const parsed = YSCParser.parse(profile);
-      for (const key of ["supplier", "article", "name", "price", "unit", "currency"]) {
+      for (const key of ["supplier", "brand", "article", "name", "price", "unit", "currency"]) {
         result[key] = parsed[key];
         const field = panel.querySelector(`#ysc-value-${key}`);
         if (field) field.value = result[key];
@@ -308,7 +308,7 @@
     }
     if (profile.format.excelVertical) settings.append(explanation("in_enter_mode_the_layout_defines_rows_1_26_instead_of_columns_a_z_pl"));
     const columns = YSCFormatter.excelColumns(profile.format);
-    const labels = { skip: t("leave_unchanged"), fullName: t("full_description"), supplier: t("supplier"), article: t("article_sku"), name: t("product_name"), avcName: t("avc_name"), info: t("avc_info"), unit: t("unit_with_dimensions"), plainUnit: t("unit_only"), price: t("price"), pricePerUnit: t("price_per_square_or_running_metre"), currency: t("currency"), sheetLength: t("length_m"), sheetWidth: t("width_m"), sheetThickness: t("thickness_mm"), sheetSize: t("sheet_size_m"), usage: t("avc_usage"), kind: t("avc_kind"), weight: t("avc_weight"), package: t("avc_package"), url: t("current_page_url"), imageUrl: t(result.localImagePath ? "local_image_export_path" : "product_image_url"), imageFormula: t(result.localImagePath ? "local_image_export_formula" : "image_image_url"), join: t("join_with_a_space") };
+    const labels = { skip: t("leave_unchanged"), fullName: t("full_description"), supplier: t("supplier"), brand: t("brand"), article: t("article_sku"), name: t("product_name"), avcName: t("avc_name"), info: t("avc_info"), unit: t("unit_with_dimensions"), plainUnit: t("unit_only"), price: t("price"), pricePerUnit: t("price_per_square_or_running_metre"), currency: t("currency"), sheetLength: t("length_m"), sheetWidth: t("width_m"), sheetThickness: t("thickness_mm"), sheetSize: t("sheet_size_m"), usage: t("avc_usage"), kind: t("avc_kind"), weight: t("avc_weight"), package: t("avc_package"), url: t("current_page_url"), imageUrl: t(result.localImagePath ? "local_image_export_path" : "product_image_url"), imageFormula: t(result.localImagePath ? "local_image_export_formula" : "image_image_url"), join: t("join_with_a_space") };
     const strip = $("div", { className: "ysc-excel-row" });
     // Literal text belongs to the selected style, independently for each cell.
     labels.anyText = t("any_text");
@@ -774,9 +774,14 @@
     quickCopy.onclick = copyQuick;
     panel.append(heading, $("div", { className: "ysc-quick-result" }, [$("div", { id: "ysc-quick-preview", textContent: quickText() }), quickCopy]));
     const imageStage = $("div", { className: "ysc-product-image-stage" });
-    const [currentSupplierLabel, currentSupplier] = input(t("supplier"), result.supplier, updateSupplier); const [currentArticleLabel, currentArticle] = input(t("article_sku"), result.article, v => { result.article = v; refreshPreview(); }); const [currentNameLabel, currentName] = input(t("product_name"), result.name, v => { result.name = v; refreshPreview(); }); imageStage.append(currentSupplierLabel, currentSupplier, currentArticleLabel, currentArticle, currentNameLabel, currentName);
+    // The supplier and the brand are one-line values that name a row, so they share one row of the panel.
+    const [currentSupplierLabel, currentSupplier] = input(t("supplier"), result.supplier, updateSupplier);
+    const [currentBrandLabel, currentBrand] = input(t("brand"), result.brand, v => { result.brand = v; refreshPreview(); });
+    const identityRow = $("div", { className: "ysc-identity-row" }, [$("div", {}, [currentSupplierLabel, currentSupplier]), $("div", {}, [currentBrandLabel, currentBrand])]);
+    const [currentArticleLabel, currentArticle] = input(t("article_sku"), result.article, v => { result.article = v; refreshPreview(); }); const [currentNameLabel, currentName] = input(t("product_name"), result.name, v => { result.name = v; refreshPreview(); }); imageStage.append(identityRow, currentArticleLabel, currentArticle, currentNameLabel, currentName);
     inlinePicker(currentArticle, "article", t("pick_article_on_page"));
     inlinePicker(currentName, "name", t("pick_name_on_page"));
+    inlinePicker(currentBrand, "brand", t("pick_brand_on_page"));
     const imageChoices = result.candidates.imageUrl || [];
     {
       const imageIndex = imageChoices.indexOf(result.imageUrl);
@@ -809,7 +814,7 @@
     unitBox.querySelector("label").title = t("unit_pcs_m_m");
     inlinePicker(priceBox.querySelector("input"), "price", t("pick_price_on_page"));
     inlinePicker(unitBox.querySelector("input"), "unit", t("pick_unit"));
-    currentSupplier.id = "ysc-value-supplier"; currentArticle.id = "ysc-value-article"; currentName.id = "ysc-value-name";
+    currentSupplier.id = "ysc-value-supplier"; currentBrand.id = "ysc-value-brand"; currentArticle.id = "ysc-value-article"; currentName.id = "ysc-value-name";
     priceBox.querySelector("input").id = "ysc-value-price"; unitBox.querySelector("input").id = "ysc-value-unit";
     const currencyBox = $("div");
     currencyBox.append(...input(t("currency"), result.currency, v => { result.currency = YSCFormatter.currencyCode(v) || v.trim().toUpperCase(); result.confirmed = { ...result.confirmed, currency: true }; refreshPreview(); }));
@@ -830,7 +835,7 @@
     panel.append(styleSettings());
     if (result.candidates.article.length > 1) { const choices = $("select"); result.candidates.article.forEach(v => choices.append($("option", { textContent:v, value:v }))); choices.onchange = () => { result.article = choices.value; currentArticle.value = choices.value; refreshPreview(); }; panel.append($("label", { textContent:t("multiple_articles_choose_the_correct_one") }), choices); }
     // The type of the position has its own automatic control in the palette section, so it needs no rule here.
-    const rulesBox = folded("rules", t("advanced_extraction_rules"), [fieldEditor("article", t("article_sku")), fieldEditor("name", t("product_name")), fieldEditor("price", t("price")), fieldEditor("currency", t("currency")), fieldEditor("unit", t("unit_of_measure")), fieldEditor("imageUrl", t("product_image_url")), ...Object.keys(avcFieldLabels).filter(key => key !== "usage").map(key => fieldEditor(key, t(avcFieldLabels[key])))]);
+    const rulesBox = folded("rules", t("advanced_extraction_rules"), [fieldEditor("article", t("article_sku")), fieldEditor("name", t("product_name")), fieldEditor("brand", t("brand")), fieldEditor("price", t("price")), fieldEditor("currency", t("currency")), fieldEditor("unit", t("unit_of_measure")), fieldEditor("imageUrl", t("product_image_url")), ...Object.keys(avcFieldLabels).filter(key => key !== "usage").map(key => fieldEditor(key, t(avcFieldLabels[key])))]);
     panel.append(rulesBox);
     if (profile.format.sheet) {
       panel.querySelector("#ysc-rules").append(fieldEditor("sheetLength", profile.format.sheetRod ? t("bar_rod_length_2") : t("sheet_length")));

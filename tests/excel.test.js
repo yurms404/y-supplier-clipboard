@@ -35,6 +35,11 @@ assert.equal(formatter.excelBlocks(product, { excelColumns: [{ text: "Мій т�
 assert.equal(formatter.excelBlocks(product, { excelColumns: ["name", "join", { text: "на замовлення" }] })[0].text, "Гвинт на замовлення");
 assert.equal(formatter.excelBlocks(product, { excelColumns: [{ text: "  Два  пробіли  " }] })[0].text, "  Два  пробіли  ");
 assert.equal(formatter.excelValue({ text: "=1+1" }, product), "'=1+1");
+// A row built by brand keeps the trademark as printed, even where the supplier is uppercased.
+assert.ok(formatter.excelFields.includes("brand"), "The brand is offered as an export field");
+assert.equal(formatter.excelBlocks({ ...product, brand: "Niemann" }, { excelColumns: ["supplier", "brand", "article"] })[0].text, "VIYAR\tNiemann\t190218");
+assert.equal(formatter.excelValue("brand", { brand: "Niemann" }, { uppercaseSupplier: true }), "Niemann");
+assert.throws(() => formatter.excelColumns({ excelColumns: ["brandy"] }), /Невірна/, "Only real fields pass the constructor");
 assert.throws(() => formatter.excelColumns({ excelColumns: [{ text: 12 }] }), /Невірна/);
 const pageUrl = "https://shop.example/product?size=2,8&variant=18#details";
 assert.equal(formatter.excelBlocks({ ...product, url: pageUrl }, { excelColumns: ["url"] })[0].text, pageUrl);

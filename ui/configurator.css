@@ -88,6 +88,8 @@
 #ysc-panel .ysc-local-image-pick .ysc-cursor-icon { position:absolute; left:3px; bottom:3px; }
 #ysc-panel .ysc-image-switch .ysc-image-nav:focus-visible,#ysc-panel .ysc-image-pick:focus-visible { outline:2px solid var(--ysc-accent); outline-offset:2px; }
 #ysc-panel .ysc-pricing > div { min-width:0; display:flex; flex-direction:column; }
+#ysc-panel .ysc-identity-row { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; align-items:end; }
+#ysc-panel .ysc-identity-row > div { min-width:0; display:flex; flex-direction:column; }
 #ysc-panel .ysc-sheet-meta { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:8px; align-items:end; }
 #ysc-panel .ysc-sheet-meta label { font-size:12px; }
 #ysc-panel .ysc-avc { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0 8px; align-items:end; }

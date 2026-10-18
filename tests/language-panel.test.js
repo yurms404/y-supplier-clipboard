@@ -329,7 +329,7 @@ const copied = [];
   console.log("Compact thickness row and manual thickness in full CAD name passed");
   listener({ type: "YSC_CONFIGURE" }); await settle();
   panel = root.querySelector("#ysc-panel");
-  const keys = ["article", "name", "price", "unit", "sheetLength", "sheetWidth", "sheetThickness"];
+  const keys = ["article", "name", "brand", "price", "unit", "sheetLength", "sheetWidth", "sheetThickness"];
   assert.equal(panel.querySelectorAll(".ysc-field-picker").length, keys.length);
   assert.equal(panel.querySelectorAll(".ysc-pickers").length, 0);
   for (const key of keys) {
@@ -347,7 +347,17 @@ const copied = [];
     assert.equal(picked.at(-1), key);
   }
   assert.equal(panel.querySelector("#ysc-pick-article").title, "Выбрать артикул на странице");
-  console.log("Seven inline picker icons: placement, translated hints, accessibility and field routing passed");
+  assert.equal(panel.querySelector("#ysc-pick-brand").title, "Выбрать бренд на странице");
+  // The brand stands next to the supplier: one of the two names a row, and both are one-line values.
+  const identityRow = panel.querySelector(".ysc-identity-row");
+  assert.equal(panel.querySelector(".ysc-product-image-stage").children[0], identityRow, "The pair opens the product block");
+  assert.ok(identityRow.querySelector("#ysc-value-supplier"), "The supplier shares the row with the brand");
+  assert.ok(identityRow.querySelector("#ysc-value-brand"), "The brand sits beside the supplier");
+  assert.equal(identityRow.querySelectorAll(".ysc-field-picker").length, 1, "Only the brand of the pair needs a picker");
+  const brandInput = panel.querySelector("#ysc-value-brand");
+  brandInput.value = "Ferro Fiori"; brandInput.listeners.input();
+  assert.equal(panel.querySelector("#ysc-value-brand").value, "Ferro Fiori", "The brand is a first class, editable value");
+  console.log("Eight inline picker icons: placement, translated hints, accessibility and field routing passed");
   panel.remove();
   stored.ysc_excel_mode = true;
   delete stored.ysc_work_styles;
@@ -399,7 +409,7 @@ const copied = [];
   panel = root.querySelector("#ysc-panel");
   assert.equal(panel.querySelector(".ysc-excel-row").querySelectorAll("select").length, 26);
   assert.equal(panel.querySelectorAll(".ysc-excel-mapping").length, 0, "Old field-to-column controls are removed");
-  const expectedOptions = ["skip", "fullName", "supplier", "article", "name", "avcName", "info", "unit", "plainUnit", "price", "pricePerUnit", "currency", "sheetLength", "sheetWidth", "sheetThickness", "sheetSize", "usage", "kind", "weight", "package", "url", "imageUrl", "imageFormula", "join", "anyText"];
+  const expectedOptions = ["skip", "fullName", "supplier", "brand", "article", "name", "avcName", "info", "unit", "plainUnit", "price", "pricePerUnit", "currency", "sheetLength", "sheetWidth", "sheetThickness", "sheetSize", "usage", "kind", "weight", "package", "url", "imageUrl", "imageFormula", "join", "anyText"];
   assert.deepEqual(panel.querySelector("#ysc-excel-column-A").children.map(option => option.value), expectedOptions);
   panel.querySelector(".ysc-excel-row").scrollLeft = 1200;
   panel.querySelector("#ysc-settings").open = true; panel.querySelector("#ysc-style-settings").hidden = false;

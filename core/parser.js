@@ -1,7 +1,7 @@
 globalThis.YSCParser = (() => {
   // AVC property-palette fields that are not part of the standard product card.
   const extraFields = ["usage", "kind", "info", "weight", "package"];
-  const jsonldFieldKeys = { name: "name", info: "description", kind: "category", usage: "usage", weight: "weight", package: "package" };
+  const jsonldFieldKeys = { name: "name", info: "description", kind: "category", usage: "usage", weight: "weight", package: "package", brand: "brand" };
   const text = node => (node?.textContent || "").replace(/\s+/g, " ").trim();
   const safeQuery = selector => { try { return selector ? document.querySelector(selector) : null; } catch (_) { return null; } };
   function imageUrl(value) {
@@ -19,15 +19,22 @@ globalThis.YSCParser = (() => {
     return cleaned.replace(/\s+/g, " ").trim();
   }
   const cleanArticle = value => String(value || "").replace(/^\s*(?:артикул|article|sku|код товару)\s*[:：]\s*/i, "").replace(/\s+/g, " ").trim();
-  function labelledArticles() {
+  // "Артикул: 6200 128" and "Бренд: Niemann" are the same shape, so both labels share one scan of the page text.
+  function labelled(pattern, clean = value => value) {
     // Read only rendered page text, excluding our own editor and notifications.
     return [...document.querySelectorAll("p, li, div, span, td, dd")]
       .filter(el => !el.closest("#ysc-panel, [data-ysc-notice]") && el.getClientRects().length)
       .map(el => (el.innerText || "").trim())
-      .filter(value => value.length < 160 && /^(?:артикул|article|sku|код товару)\s*[:：]/i.test(value) && !/[\r\n]/.test(value))
-      .map(cleanArticle).filter(Boolean);
+      .filter(value => value.length < 160 && pattern.test(value) && !/[\r\n]/.test(value))
+      .map(value => clean(value.replace(pattern, "").trim())).filter(Boolean);
   }
-  const jsonLd = () => [...document.querySelectorAll('script[type="application/ld+json"]')].flatMap(s => { try { const v = JSON.parse(s.textContent); return Array.isArray(v) ? v : [v]; } catch (_) { return []; } }).flatMap(v => v["@graph"] || [v]).filter(v => /Product/i.test(Array.isArray(v["@type"]) ? v["@type"].join(" ") : v["@type"] || ""));
+  const articleLabel = /^(?:артикул|article|sku|код товару)\s*[:：]\s*/i;
+  // The manufacturer and the trademark mean the same thing to a receiver that sorts its rows by brand.
+  const brandLabel = /^(?:бренд|торгова марка|торговая марка|тм|brand|виробник|производитель|manufacturer|marka|märke)\s*[:：]\s*/i;
+  const labelledArticles = () => labelled(articleLabel, cleanArticle);
+  const labelledBrands = () => labelled(brandLabel);
+  const jsonLdBlocks = () => [...document.querySelectorAll('script[type="application/ld+json"]')].flatMap(s => { try { const v = JSON.parse(s.textContent); return Array.isArray(v) ? v : [v]; } catch (_) { return []; } }).flatMap(v => v["@graph"] || [v]).filter(v => v && typeof v === "object");
+  const jsonLd = () => jsonLdBlocks().filter(v => /Product/i.test(Array.isArray(v["@type"]) ? v["@type"].join(" ") : v["@type"] || ""));
   const offers = products => products.flatMap(p => Array.isArray(p.offers) ? p.offers : p.offers ? [p.offers] : []);
   const offerUnit = offer => offer?.priceSpecification?.referenceQuantity?.unitText || offer?.priceSpecification?.unitText || "";
   function priceNodes() {
@@ -80,6 +87,9 @@ globalThis.YSCParser = (() => {
       if (field === "price") return String(offers([data])[0]?.price ?? "");
       if (field === "currency") return offers([data])[0]?.priceCurrency || offers([data])[0]?.priceSpecification?.priceCurrency || "";
       if (field === "unit") return offerUnit(offers([data])[0]);
+      // The kind is the branch of the catalogue the card sits in, which the breadcrumb trail names better than the
+      // structured category alone.
+      if (field === "kind") return localCategory(data);
       const raw = data[jsonldFieldKeys[field] || (field === "name" ? "name" : "sku")];
       return String((raw && typeof raw === "object" ? raw.value ?? raw.name ?? "" : raw) || "");
     }
@@ -108,6 +118,13 @@ globalThis.YSCParser = (() => {
       ...offers(jsonLd()).map(offerUnit), text(document.querySelector('[itemprop="unitText"]')),
       ...priceNodes().map(el => unitFromPrice(text(el)))
     ].filter(Boolean))];
+    // A brand is structured metadata on a shop that keeps it, and a printed label on a shop that does not.
+    if (field === "brand") return [...new Set([
+      ...jsonLd().flatMap(p => [].concat(p.brand || []).map(value => typeof value === "object" && value ? value.name || value.value || "" : value)),
+      text(document.querySelector('[itemprop="brand"]')), document.querySelector('[itemprop="brand"]')?.getAttribute("content"),
+      document.querySelector('meta[property="product:brand"]')?.content, document.querySelector('meta[property="og:brand"]')?.content,
+      document.querySelector('meta[name="brand"]')?.content, ...labelledBrands()
+    ].filter(value => typeof value === "string" && value.trim()).map(value => value.trim()))];
     const products = jsonLd(); const key = field === "name" ? "name" : "sku";
     const values = products.map(p => p[key]).filter(v => typeof v === "string" && v.trim());
     if (field === "name") values.push(text(document.querySelector('[itemprop="name"]')), document.querySelector('meta[property="og:title"]')?.content, text(document.querySelector('h1')));
@@ -139,12 +156,48 @@ globalThis.YSCParser = (() => {
     }
     return [...new Set(values.filter(v => YSCFormatter.dimensionMetres(v)))];
   }
+  // The card sits in a parent catalog, and a shop names that branch in its breadcrumb trail. The trail repeats the
+  // product as its last step and its tightest node is often a brand or model line, so the step above it is taken:
+  // "Каталог › Меблева фурнітура › Ручки та гайки › Ручки для меблів" gives "Ручки та гайки". A trail that keeps a
+  // single step still yields that step, and a shop without a trail falls back to the structured category path.
+  const crumbRoot = /^(?:головна(?:\s+сторінка)?|на\s+головну|додому|каталог(?:\s+товарів|\s+продукції)?|усі\s+товари|товари|продукція|home|start|main|главная|магазин|shop|store|catalog)$/i;
+  const crumbText = value => String(value ?? "").replace(/\s+/g, " ").trim();
+  function breadcrumbSteps() {
+    const listed = [];
+    for (const block of jsonLdBlocks()) {
+      if (!/BreadcrumbList/i.test([].concat(block["@type"] || []).join(" "))) continue;
+      const items = [].concat(block.itemListElement || []);
+      items.forEach((item, index) => {
+        const name = crumbText(typeof item?.item === "object" ? item.item?.name : item?.name);
+        if (name) listed.push([Number(item?.position) || index + 1, name]);
+      });
+    }
+    if (listed.length) return listed.sort((a, b) => a[0] - b[0]).map(entry => entry[1]);
+    for (const container of document.querySelectorAll('[class*="crumb" i], [aria-label*="crumb" i], [itemprop="breadcrumb"]')) {
+      const steps = (container?.querySelectorAll ? [...container.querySelectorAll("a, [itemprop='itemListElement']")] : []).map(node => crumbText(text(node))).filter(Boolean);
+      if (steps.length) return steps;
+    }
+    return [];
+  }
+  function localCategory(product = {}) {
+    const ladder = path => path.map(crumbText).filter(step => step && !crumbRoot.test(step));
+    const steps = ladder(breadcrumbSteps());
+    if (steps.length) {
+      // Some shops link the current page too, and the trail then ends with the product itself.
+      const named = crumbText(product.name).toLowerCase(), last = steps.at(-1).toLowerCase();
+      if (steps.length > 1 && named.length >= 4 && last.length >= 4 && (named.startsWith(last.slice(0, 40)) || last.startsWith(named.slice(0, 40)))) steps.pop();
+      return steps.length > 1 ? steps.at(-2) : steps[0];
+    }
+    const parsed = ladder([].concat(product.category || []).flatMap(value => String(typeof value === "object" && value ? value.name || value.value || "" : value).split(/\s*(?:[›>»|]|\/|\\)\s*/)).filter(Boolean));
+    return parsed.length > 1 ? parsed.at(-2) : parsed[0] || "";
+  }
   function parse(profile = {}) {
     const product = jsonLd()[0] || {};
     const fields = profile.fields || {};
     const cleanValues = values => [...new Set(values.map(v => removeBlocked(v, profile.blacklist)).filter(Boolean))];
     const articleValues = cleanValues(fields.article?.source === "auto" || !fields.article ? candidates("article") : [sourceValue(fields.article, "article", product)].filter(Boolean));
     const nameValues = cleanValues(fields.name?.source === "auto" || !fields.name ? candidates("name") : [sourceValue(fields.name, "name", product)].filter(Boolean));
+    const brandValues = cleanValues(fields.brand?.source === "auto" || !fields.brand ? candidates("brand") : [sourceValue(fields.brand, "brand", product)].filter(Boolean));
     const valuesFor = key => cleanValues(fields[key]?.source === "auto" || !fields[key] ? candidates(key, profile.blacklist) : [sourceValue(fields[key], key, product)].filter(Boolean));
     const priceValues = valuesFor("price").map(YSCFormatter.priceNumber).filter(Boolean), unitValues = valuesFor("unit"), imageValues = valuesFor("imageUrl");
     const currencyValues = valuesFor("currency").map(YSCFormatter.currencyCode).filter(Boolean);
@@ -173,7 +226,7 @@ globalThis.YSCParser = (() => {
     }));
     const sheetLength = sheetMode ? valuesFor("sheetLength") : [], sheetWidth = sheetMode && !rodMode ? valuesFor("sheetWidth") : [];
     const sheetThickness = sheetMode ? [...new Set(valuesFor("sheetThickness").map(YSCFormatter.thicknessMm).filter(Boolean))] : [];
-    return { ...extras, usageAuto, supplier, article: articleValues[0] || "", name: nameValues[0] || "", price: priceValues[0] || "", currency: currencyValues.length === 1 ? currencyValues[0] : "", unit, unitDefaulted, imageUrl: imageValues[0] || "", sheetLength: sheetLength[0] || "", sheetWidth: sheetWidth[0] || "", sheetThickness: sheetThickness[0] || "", candidates: { article: articleValues, name: nameValues, price: priceValues, currency: currencyValues, unit: unitValues, imageUrl: imageValues, sheetLength, sheetWidth, sheetThickness }, productDetected: Boolean(product.name || text(document.querySelector("h1"))) };
+    return { ...extras, usageAuto, supplier, article: articleValues[0] || "", name: nameValues[0] || "", brand: brandValues[0] || "", price: priceValues[0] || "", currency: currencyValues.length === 1 ? currencyValues[0] : "", unit, unitDefaulted, imageUrl: imageValues[0] || "", sheetLength: sheetLength[0] || "", sheetWidth: sheetWidth[0] || "", sheetThickness: sheetThickness[0] || "", candidates: { article: articleValues, name: nameValues, brand: brandValues, price: priceValues, currency: currencyValues, unit: unitValues, imageUrl: imageValues, sheetLength, sheetWidth, sheetThickness }, productDetected: Boolean(product.name || text(document.querySelector("h1"))) };
   }
   return { parse, candidates, safeQuery, text, cleanArticle, removeBlocked, imageUrl, priceText, priceCurrency, extraFields };
 })();

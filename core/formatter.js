@@ -129,7 +129,7 @@ globalThis.YSCFormatter = (() => {
   const thicknessWithUnit = (value, options = {}) => { const millimetres = thicknessMm(value, options); return millimetres && options.dimensionUnits ? `${millimetres}mm` : millimetres; };
   const excelLayout = { name: 2, unit: 5, price: 6 };
   const columnName = column => String.fromCharCode(64 + column);
-  const excelFields = ["fullName", "supplier", "article", "name", "avcName", "info", "unit", "plainUnit", "price", "pricePerUnit", "currency", "sheetLength", "sheetWidth", "sheetThickness", "sheetSize", "usage", "kind", "weight", "package", "url", "imageUrl", "imageFormula"];
+  const excelFields = ["fullName", "supplier", "brand", "article", "name", "avcName", "info", "unit", "plainUnit", "price", "pricePerUnit", "currency", "sheetLength", "sheetWidth", "sheetThickness", "sheetSize", "usage", "kind", "weight", "package", "url", "imageUrl", "imageFormula"];
   const excelJoin = "join";
   const isLiteralColumn = key => Boolean(key && typeof key === "object" && !Array.isArray(key) && typeof key.text === "string");
   function excelColumns(options = {}) {
@@ -155,6 +155,8 @@ globalThis.YSCFormatter = (() => {
     const values = {
       fullName: () => format(fields, { ...options, excel: false }),
       supplier: () => { const value = clean(fields.supplier, formatting); return formatting.uppercaseSupplier ? value.toUpperCase() : value; },
+      // The brand keeps its own case: it is a trademark, not the shop name, and a row built by brand needs it as printed.
+      brand: () => clean(fields.brand, formatting),
       article: () => clean(fields.article, formatting), name: () => clean(fields.name, formatting),
       // The palette name is the product name alone, cleared of characters A>V>C> forbids in a block name.
       avcName: () => avcName(clean(fields.name, formatting)),

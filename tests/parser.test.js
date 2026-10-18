@@ -59,4 +59,38 @@ document.querySelectorAll = selector => selector.includes("application/ld+json")
 assert.equal(parser.parse().currency, "EUR", "Visible translated prices provide a currency fallback");
 assert.equal(parser.priceCurrency({ textContent: "€12.24" }), "EUR", "The clicked price provides its currency");
 document.querySelectorAll = originalAll;
+
+// A brand is a field of its own, because some receivers build a row by brand instead of by seller.
+document.querySelectorAll = selector => selector.includes("application/ld+json")
+  ? [{ textContent: JSON.stringify({ "@type": "Product", name: "Панель МДФ", brand: { "@type": "Brand", name: "Niemann" } }) }] : [];
+assert.equal(parser.parse().brand, "Niemann", "A structured brand object becomes the brand value");
+assert.deepEqual(Array.from(parser.parse().candidates.brand), ["Niemann"]);
+document.querySelectorAll = selector => selector.includes("application/ld+json")
+  ? [{ textContent: JSON.stringify({ "@type": "Product", name: "Ручка Ferro Fiori" }) }]
+  : [{ innerText: "Бренд: Ferro Fiori", getClientRects: () => [1], closest: () => null }];
+assert.equal(parser.parse().brand, "Ferro Fiori", "A printed label reaches the brand when the metadata is silent");
+assert.equal(parser.parse({ fields: { brand: { enabled: true, source: "manual", value: "Свій бренд" } } }).brand, "Свій бренд");
+assert.equal(parser.parse({ fields: { brand: { enabled: false, source: "manual", value: "Свій бренд" } } }).brand, "");
+console.log("brand field: structured metadata, printed label, manual value and disabled field passed");
+
+// The kind of a position is the catalogue branch the card came from, and the breadcrumb trail names it.
+const crumb = value => ({ textContent: value });
+const trail = (productName, steps) => selector => selector.includes("application/ld+json")
+  ? [{ textContent: JSON.stringify({ "@type": "Product", name: productName }) }]
+  : selector.includes("crumb") ? [{ querySelectorAll: () => steps.map(crumb) }] : [];
+const kind = () => parser.parse({ fields: { kind: { enabled: true, source: "auto" } } }).kind;
+// The tightest node is often a brand or a model line, so the branch above it is the local type.
+document.querySelectorAll = trail("Ручка Ferro Fiori M 0734.160", ["Головна", "Каталог", "Меблева фурнітура", "Ручки та гайки", "Ручки для меблів", "Ручка Ferro Fiori M 0734.160"]);
+assert.equal(kind(), "Ручки та гайки", "The product step and the roots are dropped, then the parent branch is taken");
+document.querySelectorAll = trail("Панель МДФ NIEMANN 4473H Acrylux PREMIUM 2800x1300x18мм", ["Каталог", "Плитні матеріали", "МДФ панелі", "МДФ Niemann"]);
+assert.equal(kind(), "МДФ панелі", "A brand line in the trail is skipped in favour of the material group");
+document.querySelectorAll = trail("Ручка", ["Головна", "Каталог", "Фурнітура"]);
+assert.equal(kind(), "Фурнітура", "A trail that keeps one branch still yields that branch");
+document.querySelectorAll = selector => selector.includes("application/ld+json")
+  ? [{ textContent: JSON.stringify({ "@type": "Product", name: "Ручка", category: "Меблі > Фурнітура > Ручки" }) }] : [];
+assert.equal(kind(), "Фурнітура", "A structured category path is read the same way");
+document.querySelectorAll = selector => selector.includes("application/ld+json")
+  ? [{ textContent: JSON.stringify({ "@type": "BreadcrumbList", itemListElement: [{ position: 1, name: "Головна" }, { position: 2, name: "Каталог" }, { position: 3, name: "Меблева фурнітура" }, { position: 4, name: "Ручки та гайки" }, { position: 5, name: "Ручки для меблів" }] }) }, { textContent: JSON.stringify({ "@type": "Product", name: "Ручка Ferro Fiori M 0734.160" }) }] : [];
+assert.equal(kind(), "Ручки та гайки", "The structured trail is preferred when a shop publishes one");
+console.log("local product type: breadcrumb trail, root and product steps, category path fallback passed");
 console.log("parser regression tests passed");
