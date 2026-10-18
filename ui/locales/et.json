@@ -288,5 +288,17 @@
   "open_github_release": "Ava GitHubi väljalase",
   "check_for_updates": "Otsi värskendusi",
   "checking_for_updates": "Otsime värskendusi…",
-  "up_to_date": "Kasutate uusimat versiooni {version}."
+  "up_to_date": "Kasutate uusimat versiooni {version}.",
+  "avc_properties": "A>V>C> omadused",
+  "avc_usage": "Otstarve",
+  "avc_kind": "Kategooria",
+  "avc_info": "Kirjeldus",
+  "avc_weight": "Kaal / tihedus",
+  "avc_package": "Pakend",
+  "price_per_square_or_running_metre": "Hind m² / jooksva meetri kohta",
+  "decimal_point_in_numbers": "Punkt arvudes",
+  "units_on_dimensions": "Ühikud mõõtude juures",
+  "allow_empty_dimensions": "Luba tühje mõõte",
+  "hint_avc_properties": "Väljad B, C, K ja L erinevad toodete lõikes. Muuda neid siin või määra allpool reegel; sisestatud väärtus jääb selle domeeni jaoks meelde.",
+  "dimensions_in_millimetres": "Mõõdud millimeetrites"
 }

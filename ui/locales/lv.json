@@ -288,5 +288,17 @@
   "open_github_release": "Atvērt GitHub laidienu",
   "check_for_updates": "Pārbaudīt atjauninājumus",
   "checking_for_updates": "Pārbaudām atjauninājumus…",
-  "up_to_date": "Jums ir jaunākā versija {version}."
+  "up_to_date": "Jums ir jaunākā versija {version}.",
+  "avc_properties": "A>V>C> rekvizīti",
+  "avc_usage": "Pielietojums",
+  "avc_kind": "Kategorija",
+  "avc_info": "Apraksts",
+  "avc_weight": "Svars / blīvums",
+  "avc_package": "Iepakojums",
+  "price_per_square_or_running_metre": "Cena par m² / tekošo metru",
+  "decimal_point_in_numbers": "Punkts skaitļos",
+  "units_on_dimensions": "Mērvienības pie izmēriem",
+  "allow_empty_dimensions": "Atļaut tukšus izmērus",
+  "hint_avc_properties": "Lauki B, C, K un L atšķiras dažādiem produktiem. Rediģē tos šeit vai iestati noteikumu zemāk; ievadītā vērtība tiek saglabāta šim domēnam.",
+  "dimensions_in_millimetres": "Izmēri milimetros"
 }

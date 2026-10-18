@@ -1,4 +1,7 @@
 globalThis.YSCParser = (() => {
+  // AVC property-palette fields that are not part of the standard product card.
+  const extraFields = ["usage", "kind", "info", "weight", "package"];
+  const jsonldFieldKeys = { name: "name", info: "description", kind: "category", usage: "usage", weight: "weight", package: "package" };
   const text = node => (node?.textContent || "").replace(/\s+/g, " ").trim();
   const safeQuery = selector => { try { return selector ? document.querySelector(selector) : null; } catch (_) { return null; } };
   function imageUrl(value) {
@@ -69,7 +72,8 @@ globalThis.YSCParser = (() => {
       if (field === "price") return String(offers([data])[0]?.price ?? "");
       if (field === "currency") return offers([data])[0]?.priceCurrency || offers([data])[0]?.priceSpecification?.priceCurrency || "";
       if (field === "unit") return offerUnit(offers([data])[0]);
-      return String(data[field === "name" ? "name" : "sku"] || "");
+      const raw = data[jsonldFieldKeys[field] || (field === "name" ? "name" : "sku")];
+      return String((raw && typeof raw === "object" ? raw.value ?? raw.name ?? "" : raw) || "");
     }
     return "";
   }
@@ -142,9 +146,18 @@ globalThis.YSCParser = (() => {
     const hostnameSupplier = hostnameParts[0]?.toLowerCase() === "www" ? hostnameParts[1] : hostnameParts[0];
     const configuredSupplier = /^www$/i.test(String(profile.supplier || "").trim()) ? "" : profile.supplier;
     const supplier = removeBlocked(configuredSupplier || sourceValue(fields.supplier, "supplier", product) || hostnameSupplier, profile.blacklist);
+    // AVC palette fields. Usage follows the sheet/rod mode unless a rule overrides it.
+    const extras = Object.fromEntries(extraFields.map(key => {
+      const rule = { enabled: true, selector: "", regex: "", attribute: "", value: "", ...(fields[key] || {}) };
+      if (!rule.enabled) return [key, ""];
+      if (key === "usage" && (!rule.source || rule.source === "auto")) return [key, profile.format?.sheet ? (profile.format.sheetRod ? "Rod" : "Sheet") : "Item"];
+      // Automatic detection for the palette fields reads the product metadata, where shops keep the description and the category.
+      const source = !rule.source || rule.source === "auto" ? "jsonld" : rule.source;
+      return [key, removeBlocked(sourceValue({ ...rule, source }, key, product), profile.blacklist)];
+    }));
     const sheetLength = profile.format?.sheet ? valuesFor("sheetLength") : [], sheetWidth = profile.format?.sheet ? valuesFor("sheetWidth") : [];
     const sheetThickness = profile.format?.sheet ? [...new Set(valuesFor("sheetThickness").map(YSCFormatter.thicknessMm).filter(Boolean))] : [];
-    return { supplier, article: articleValues[0] || "", name: nameValues[0] || "", price: priceValues[0] || "", currency: currencyValues.length === 1 ? currencyValues[0] : "", unit, unitDefaulted, imageUrl: imageValues[0] || "", sheetLength: sheetLength[0] || "", sheetWidth: sheetWidth[0] || "", sheetThickness: sheetThickness[0] || "", candidates: { article: articleValues, name: nameValues, price: priceValues, currency: currencyValues, unit: unitValues, imageUrl: imageValues, sheetLength, sheetWidth, sheetThickness }, productDetected: Boolean(product.name || text(document.querySelector("h1"))) };
+    return { ...extras, supplier, article: articleValues[0] || "", name: nameValues[0] || "", price: priceValues[0] || "", currency: currencyValues.length === 1 ? currencyValues[0] : "", unit, unitDefaulted, imageUrl: imageValues[0] || "", sheetLength: sheetLength[0] || "", sheetWidth: sheetWidth[0] || "", sheetThickness: sheetThickness[0] || "", candidates: { article: articleValues, name: nameValues, price: priceValues, currency: currencyValues, unit: unitValues, imageUrl: imageValues, sheetLength, sheetWidth, sheetThickness }, productDetected: Boolean(product.name || text(document.querySelector("h1"))) };
   }
-  return { parse, candidates, safeQuery, text, cleanArticle, removeBlocked, imageUrl, priceText, priceCurrency };
+  return { parse, candidates, safeQuery, text, cleanArticle, removeBlocked, imageUrl, priceText, priceCurrency, extraFields };
 })();

@@ -288,5 +288,17 @@
   "open_github_release": "Відкрити реліз на GitHub",
   "check_for_updates": "Перевірити оновлення",
   "checking_for_updates": "Перевіряємо оновлення…",
-  "up_to_date": "У вас встановлено найновішу версію {version}."
+  "up_to_date": "У вас встановлено найновішу версію {version}.",
+  "avc_properties": "Властивості A>V>C>",
+  "avc_usage": "Призначення",
+  "avc_kind": "Категорія",
+  "avc_info": "Опис",
+  "avc_weight": "Вага / густина",
+  "avc_package": "Упаковка",
+  "price_per_square_or_running_metre": "Ціна за м² / пог.м",
+  "decimal_point_in_numbers": "Крапка в числах",
+  "units_on_dimensions": "Одиниці біля розмірів",
+  "allow_empty_dimensions": "Дозволити порожні розміри",
+  "hint_avc_properties": "Поля B, C, K і L різняться для різних товарів. Змініть їх тут або задайте правило вилучення нижче; введене значення запам'ятається для цього домену.",
+  "dimensions_in_millimetres": "Розміри в міліметрах"
 }

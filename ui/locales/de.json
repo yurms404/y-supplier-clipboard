@@ -288,5 +288,17 @@
   "open_github_release": "GitHub-Release öffnen",
   "check_for_updates": "Nach Updates suchen",
   "checking_for_updates": "Suche nach Updates…",
-  "up_to_date": "Sie verwenden die neueste Version {version}."
+  "up_to_date": "Sie verwenden die neueste Version {version}.",
+  "avc_properties": "A>V>C>-Eigenschaften",
+  "avc_usage": "Verwendung",
+  "avc_kind": "Kategorie",
+  "avc_info": "Beschreibung",
+  "avc_weight": "Gewicht / Dichte",
+  "avc_package": "Verpackung",
+  "price_per_square_or_running_metre": "Preis pro m² / lfm",
+  "decimal_point_in_numbers": "Punkt in Zahlen",
+  "units_on_dimensions": "Einheiten an Maßen",
+  "allow_empty_dimensions": "Leere Maße erlauben",
+  "hint_avc_properties": "Die Felder B, C, K und L unterscheiden sich je Produkt. Bearbeiten Sie sie hier oder legen Sie unten eine Extraktionsregel fest; ein eingegebener Wert wird für diese Domain gespeichert.",
+  "dimensions_in_millimetres": "Maße in Millimetern"
 }

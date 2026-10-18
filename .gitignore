@@ -7,3 +7,5 @@ dist/
 *.tmp
 # User-supplied research screenshot, not part of the extension.
 /ec7c12f2-ae0b-47fc-9270-f5252c49b9c2.jpg
+# User-supplied A>V>C> sample workbook with real supplier prices, not part of the extension.
+/docs/Книга1.xlsx

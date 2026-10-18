@@ -28,6 +28,7 @@ const localImageMessages = [];
 const scrollFrames = [];
 let domainProfiles = [], allowDelete = true;
 const deletedDomains = [], confirmations = [];
+const rememberedFields = [];
 const navigations = [], selectedProfiles = [], rememberedPages = [];
 const product = { supplier: "VIYAR", article: "190218", name: "Гвинт цинк", price: "1.02", unit: "шт", imageUrl: "https://images.example/one.jpg", productDetected: true, candidates: { article: ["190218"], name: ["Гвинт цинк"], price: ["1.02"], unit: ["шт"], imageUrl: ["https://images.example/one.jpg", "https://images.example/two.jpg"] } };
 const context = {
@@ -40,6 +41,7 @@ const context = {
     remember: async (p, url) => { rememberedPages.push(url); return { lastUrl: url }; },
     select: async id => { selectedProfiles.push(id); },
     pageUrl: (value, domain) => { try { const url = new URL(value); return /^https?:$/.test(url.protocol) && url.hostname === domain && !url.username && !url.password ? url.href : ""; } catch { return ""; } },
+    saveField: async (p, key, patch) => { rememberedFields.push([key, patch.value]); },
     removeDomain: async domain => { deletedDomains.push(domain); domainProfiles = domainProfiles.filter(p => p.domain !== domain); }
   },
   YSCParser: { parse: () => structuredClone(product), removeBlocked: value => value },
@@ -219,7 +221,7 @@ const copied = [];
   assert.equal(panel.querySelector("#ysc-settings").children.at(-1), help);
   assert.equal(help.querySelector("#ysc-help-name").textContent, "Y Supplier Clipboard");
   assert.match(help.querySelector("#ysc-help-description").textContent, /буфер обміну постачальника/);
-  assert.equal(help.querySelector("#ysc-revision-date").textContent, "Дата редакції: 15.10.2026");
+  assert.equal(help.querySelector("#ysc-revision-date").textContent, "Дата редакції: 18.10.2026");
   assert.equal(help.querySelector("#ysc-code-version").textContent, `Версія коду: ${JSON.parse(fs.readFileSync("manifest.json", "utf8")).version}`);
   assert.deepEqual(help.querySelectorAll("a").map(a => a.href), ["chrome-extension://test/ui/help.html?doc=readme", "chrome-extension://test/ui/help.html?doc=license", "https://web.telegram.org/a/#-1001323392064_1018"]);
   const checkUpdate = help.querySelector("#ysc-check-update");
@@ -239,7 +241,7 @@ const copied = [];
   let select = panel.querySelector("#ysc-language"); select.value = "en"; await select.onchange();
   panel = root.querySelector("#ysc-panel");
   assert.equal(panel.lang, "en");
-  assert.equal(panel.querySelector("#ysc-revision-date").textContent, "Revision date: 15.10.2026");
+  assert.equal(panel.querySelector("#ysc-revision-date").textContent, "Revision date: 18.10.2026");
   assert.equal(panel.querySelector("#ysc-copy").textContent, "Copy → A");
   assert.equal(panel.querySelector("#ysc-value-article").value, "190218-corrected");
   assert.equal(panel.querySelector("#ysc-value-name").value, "Гвинт цинк");
@@ -393,7 +395,7 @@ const copied = [];
   panel = root.querySelector("#ysc-panel");
   assert.equal(panel.querySelector(".ysc-excel-row").querySelectorAll("select").length, 26);
   assert.equal(panel.querySelectorAll(".ysc-excel-mapping").length, 0, "Old field-to-column controls are removed");
-  const expectedOptions = ["skip", "fullName", "supplier", "article", "name", "unit", "plainUnit", "price", "currency", "sheetLength", "sheetWidth", "sheetThickness", "sheetSize", "url", "imageUrl", "imageFormula", "join", "anyText"];
+  const expectedOptions = ["skip", "fullName", "supplier", "article", "name", "info", "unit", "plainUnit", "price", "pricePerUnit", "currency", "sheetLength", "sheetWidth", "sheetThickness", "sheetSize", "usage", "kind", "weight", "package", "url", "imageUrl", "imageFormula", "join", "anyText"];
   assert.deepEqual(panel.querySelector("#ysc-excel-column-A").children.map(option => option.value), expectedOptions);
   panel.querySelector(".ysc-excel-row").scrollLeft = 1200;
   panel.querySelector("#ysc-settings").open = true; panel.querySelector("#ysc-style-settings").hidden = false;
@@ -620,6 +622,42 @@ const copied = [];
   assert.ok(root.querySelector("#ysc-panel"), "Quick copy leaves style editing available");
   assert.equal(context.YSCWorkStyles.uniqueName("Excel", [{ id: "1", name: "Excel" }, { id: "2", name: "Excel (2)" }]), "Excel (3)");
   console.log("Work styles: migration, isolated schemas, duplication, rename, create, delete, reopening and quick copy passed");
+  // The built-in A>V>C> style surfaces its five palette fields and copies one row of 14 values.
+  const paletteStyles = structuredClone(stored.ysc_work_styles), paletteSelected = stored.ysc_work_style;
+  const paletteStyle = stored.ysc_work_styles.find(s => s.id === "avc");
+  assert.ok(paletteStyle, "The palette style is offered next to the existing ones");
+  paletteStyle.format.sheet = true; paletteStyle.format.sheetInputUnit = "mm";
+  stored.ysc_work_style = "avc";
+  panel.remove(); listener({ type: "YSC_CONFIGURE" }); await settle();
+  panel = root.querySelector("#ysc-panel");
+  const paletteBox = panel.querySelector("#ysc-avc");
+  assert.ok(paletteBox, "The palette style reveals its property fields");
+  assert.equal(paletteBox.querySelector("#ysc-value-usage").tagName, "SELECT");
+  assert.equal(paletteBox.querySelectorAll("option").length, 8, "Usage offers the six palette values, a dash and an empty choice");
+  for (const key of ["kind", "info", "weight", "package"]) assert.ok(paletteBox.querySelector(`#ysc-value-${key}`), `${key} is editable in the panel`);
+  const usageChoice = paletteBox.querySelector("#ysc-value-usage"); usageChoice.value = "Sheet"; usageChoice.onchange();
+  for (const [key, value] of [["article", "29699"], ["price", "657"], ["kind", "ДСП"], ["info", "Плита, шліфована"], ["weight", "11,2"], ["package", "1"]]) {
+    const field = panel.querySelector(`#ysc-value-${key}`); field.value = value; field.listeners.input();
+  }
+  assert.match(panel.querySelector(".ysc-preview-data").textContent, /Плита, шліфована/, "A palette value reaches the preview at once");
+  assert.equal(rememberedFields.at(-1)[0], "usage", "A palette value is remembered for the domain");
+  paletteBox.querySelector("#ysc-value-package").listeners.change();
+  assert.equal(rememberedFields.at(-1)[0], "package", "Leaving a palette field also remembers it");
+  const beforePaletteCopy = copied.length;
+  await panel.querySelector("#ysc-copy").onclick();
+  assert.equal(copied.length, beforePaletteCopy + 1, `The palette style must copy without a sheet size confirmation: ${root.querySelectorAll(".ysc-error").at(-1)?.textContent}`);
+  const paletteRow = copied.at(-1).split("\t");
+  assert.equal(paletteRow.length, 14, "The palette clipboard line carries exactly 14 values");
+  assert.equal(paletteRow[0], "Гвинт цинк");
+  assert.equal(paletteRow[1], "Sheet");
+  assert.equal(paletteRow[2], "ДСП");
+  assert.equal(paletteRow[3], "Плита, шліфована", "The description keeps its comma");
+  assert.equal(paletteRow[7], "VIYAR");
+  assert.equal(paletteRow[8], "29699");
+  assert.equal(paletteRow[9], "657", "Without a size the palette falls back to the card price");
+  assert.equal(paletteRow[10], "11.2", "Palette numbers use a period");
+  console.log("A>V>C> palette style: panel fields, remembered value, live preview, no dimension confirmation and a 14 value row passed");
+  stored.ysc_work_styles = paletteStyles; stored.ysc_work_style = paletteSelected;
   profile.format.sheet = false;
   Object.assign(stored.ysc_work_styles.find(s => s.id === stored.ysc_work_style).format, { excel: true, excelColumns: ["name", "price"], sheet: false, excelSeparator: "tab" });
   product.price = ""; product.candidates.price = [];

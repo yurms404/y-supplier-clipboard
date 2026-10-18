@@ -1,5 +1,15 @@
 globalThis.YSCWorkStyles = (() => {
   const keys = ["excel", "excelColumns", "excelSeparator", "excelAscii", "excelVertical", "excelImageFormula", ...Object.keys(YSCFormatter.defaults)];
+  // A>V>C> property palette: 14 tab separated fields in a fixed order, period decimals, commas kept in text.
+  const avcId = "avc";
+  const avcColumns = ["name", "usage", "kind", "info", "sheetLength", "sheetWidth", "sheetThickness", "supplier", "article", "pricePerUnit", "weight", "package", "url", "imageUrl"];
+  const avcStyle = base => ({
+    id: avcId, name: "AVC Properties",
+    format: normalize({
+      ...base, excelColumns: avcColumns, excelSeparator: "tab", excelVertical: false, excelImageFormula: false,
+      replaceComma: false, uppercaseSupplier: false, decimalDot: true, dimensionUnits: true, dimensionInMillimetres: true, optionalDimensions: true
+    })
+  });
   function normalize(source = {}) {
     const separator = ["space", "tab", "enter", "ascii"].includes(source.excelSeparator) ? source.excelSeparator : (source.excelVertical ? "enter" : "tab");
     const ascii = Number(source.excelAscii);
@@ -19,14 +29,16 @@ globalThis.YSCWorkStyles = (() => {
   const apply = (format, style) => { keys.forEach(key => delete format[key]); Object.assign(format, normalize(style.format)); };
   function migrate(preferences, format) {
     if (Array.isArray(preferences.ysc_work_styles) && preferences.ysc_work_styles.length) {
-      const styles = preferences.ysc_work_styles.map(style => ({ ...style, format: normalize(style.format) }));
-      const selected = styles.some(s => s.id === preferences.ysc_work_style) ? preferences.ysc_work_style : styles.at(-1).id;
+      const stored = preferences.ysc_work_styles.map(style => ({ ...style, format: normalize(style.format) }));
+      const selected = stored.some(s => s.id === preferences.ysc_work_style) ? preferences.ysc_work_style : stored.at(-1).id;
+      // The built-in AVC style is seeded for existing installs too; deleting it brings it back on the next open.
+      const styles = stored.some(s => s.id === avcId) ? stored : [...stored, avcStyle({})];
       return { styles: [...styles.filter(s => s.id !== selected), styles.find(s => s.id === selected)], selected };
     }
     const common = { ...YSCFormatter.defaults, ...snapshot(format) };
     const generic = normalize({ ...common, excelColumns: ["fullName"], excelSeparator: "tab" });
     const excel = normalize({ ...common, excelColumns: YSCFormatter.excelColumns({ ...format, excelColumns: preferences.ysc_excel_columns ?? format.excelColumns, excelLayout: preferences.ysc_excel_layout ?? format.excelLayout }), excelVertical: preferences.ysc_excel_vertical ?? format.excelVertical ?? false, excelImageFormula: preferences.ysc_excel_image_formula ?? format.excelImageFormula ?? false });
-    const styles = [{ id: "cad", name: "AVC / CAD", format: generic }, { id: "excel", name: "Excel", format: excel }];
+    const styles = [{ id: "cad", name: "AVC / CAD", format: generic }, { id: "excel", name: "Excel", format: excel }, avcStyle(common)];
     const selected = preferences.ysc_excel_mode ? "excel" : "cad";
     return { styles: [...styles.filter(s => s.id !== selected), styles.find(s => s.id === selected)], selected };
   }
@@ -65,5 +77,5 @@ globalThis.YSCWorkStyles = (() => {
     catch (_) { invalid(); }
     return { name: data.name.trim(), format };
   }
-  return { snapshot, apply, migrate, save, uniqueName, exportStyle, importStyle };
+  return { snapshot, apply, migrate, save, uniqueName, exportStyle, importStyle, avcId, avcColumns };
 })();

@@ -12,7 +12,7 @@ globalThis.YSCProfiles = (() => {
   const base = domain => ({ schemaVersion: VERSION, id: crypto.randomUUID(), domain, enabled: true, supplier: defaultSupplier(domain), urlPattern: "", fields: { article: { enabled: true, source: "auto", selector: "", regex: "", attribute: "", value: "" }, name: { enabled: true, source: "auto", selector: "", regex: "", attribute: "", value: "" } }, format: {} });
   function normalize(profile) {
     const defaults = base(profile.domain || "");
-    const fields = { ...defaults.fields, price: { enabled: true, source: "auto" }, currency: { enabled: true, source: "auto" }, unit: { enabled: true, source: "auto" }, imageUrl: { enabled: true, source: "auto" }, sheetLength: { enabled: true, source: "auto" }, sheetWidth: { enabled: true, source: "auto" }, sheetThickness: { enabled: true, source: "auto" } };
+    const fields = { ...defaults.fields, price: { enabled: true, source: "auto" }, currency: { enabled: true, source: "auto" }, unit: { enabled: true, source: "auto" }, imageUrl: { enabled: true, source: "auto" }, sheetLength: { enabled: true, source: "auto" }, sheetWidth: { enabled: true, source: "auto" }, sheetThickness: { enabled: true, source: "auto" }, usage: { enabled: true, source: "auto" }, kind: { enabled: true, source: "manual" }, info: { enabled: true, source: "manual" }, weight: { enabled: true, source: "manual" }, package: { enabled: true, source: "manual" } };
     for (const key of Object.keys(fields)) fields[key] = { selector: "", regex: "", attribute: "", value: "", ...fields[key], ...profile.fields?.[key] };
     const supplier = String(profile.supplier || "").trim().toLowerCase() === "www" ? defaults.supplier : profile.supplier;
     return { ...defaults, ...profile, supplier, lastUrl: pageUrl(profile.lastUrl, defaults.domain), blacklist: Array.isArray(profile.blacklist) ? profile.blacklist.filter(v => typeof v === "string").slice(0, 100) : [], fields, format: { excel: false, ...profile.format } };
@@ -71,6 +71,18 @@ globalThis.YSCProfiles = (() => {
       await chrome.storage.local.set({ [KEY]: profiles });
     });
   }
+  function saveField(profile, key, patch) {
+    const { domain, id } = profile;
+    // Only the domain's remembered value is written; unsaved rule edits stay untouched.
+    const changes = Object.fromEntries(Object.entries(patch || {}).filter(([, value]) => typeof value === "string"));
+    return enqueue(async () => {
+      const profiles = await all();
+      const matches = profiles.filter(p => p.domain === domain);
+      if (matches.length) matches.forEach(p => { p.fields[key] = { ...p.fields[key], ...changes }; });
+      else { const created = normalize({ ...base(domain), id }); created.fields[key] = { ...created.fields[key], ...changes }; profiles.push(created); }
+      await chrome.storage.local.set({ [KEY]: profiles });
+    });
+  }
   function remove(id) { return enqueue(async () => { await chrome.storage.local.set({ [KEY]: (await all()).filter(p => p.id !== id) }); }); }
   function removeDomain(domain) {
     if (typeof domain !== "string" || !domain.trim()) return Promise.reject(new Error("Не вибрано домен."));
@@ -91,5 +103,5 @@ globalThis.YSCProfiles = (() => {
     });
   }
   function validate(value) { if (!Array.isArray(value)) throw new Error("Очікується масив профілів"); return value.map(p => normalize({ ...p, schemaVersion: VERSION })); }
-  return { base: domain => normalize(base(domain)), all, get, save, saveSupplier, saveBlacklist, remove, removeDomain, validate, pageUrl, remember, select };
+  return { base: domain => normalize(base(domain)), all, get, save, saveSupplier, saveBlacklist, saveField, remove, removeDomain, validate, pageUrl, remember, select };
 })();

@@ -288,5 +288,17 @@
   "open_github_release": "Open GitHub release",
   "check_for_updates": "Check for updates",
   "checking_for_updates": "Checking for updates…",
-  "up_to_date": "You have the latest version, {version}."
+  "up_to_date": "You have the latest version, {version}.",
+  "avc_properties": "A>V>C> properties",
+  "avc_usage": "Usage",
+  "avc_kind": "Kind / type / sort",
+  "avc_info": "Info / description",
+  "avc_weight": "Density / weight",
+  "avc_package": "Package",
+  "price_per_square_or_running_metre": "Price per m² / running metre",
+  "decimal_point_in_numbers": "Period in numbers",
+  "units_on_dimensions": "Units on dimensions",
+  "allow_empty_dimensions": "Allow empty dimensions",
+  "hint_avc_properties": "Fields B, C, K and L differ between products. Edit them here or add an extraction rule below; a typed value is remembered for this domain.",
+  "dimensions_in_millimetres": "Dimensions in millimetres"
 }

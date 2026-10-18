@@ -303,7 +303,7 @@
     }
     if (profile.format.excelVertical) settings.append(explanation("in_enter_mode_the_layout_defines_rows_1_26_instead_of_columns_a_z_pl"));
     const columns = YSCFormatter.excelColumns(profile.format);
-    const labels = { skip: t("leave_unchanged"), fullName: t("full_description"), supplier: t("supplier"), article: t("article_sku"), name: t("product_name"), unit: t("unit_with_dimensions"), plainUnit: t("unit_only"), price: t("price"), currency: t("currency"), sheetLength: t("length_m"), sheetWidth: t("width_m"), sheetThickness: t("thickness_mm"), sheetSize: t("sheet_size_m"), url: t("current_page_url"), imageUrl: t(result.localImagePath ? "local_image_export_path" : "product_image_url"), imageFormula: t(result.localImagePath ? "local_image_export_formula" : "image_image_url"), join: t("join_with_a_space") };
+    const labels = { skip: t("leave_unchanged"), fullName: t("full_description"), supplier: t("supplier"), article: t("article_sku"), name: t("product_name"), info: t("avc_info"), unit: t("unit_with_dimensions"), plainUnit: t("unit_only"), price: t("price"), pricePerUnit: t("price_per_square_or_running_metre"), currency: t("currency"), sheetLength: t("length_m"), sheetWidth: t("width_m"), sheetThickness: t("thickness_mm"), sheetSize: t("sheet_size_m"), usage: t("avc_usage"), kind: t("avc_kind"), weight: t("avc_weight"), package: t("avc_package"), url: t("current_page_url"), imageUrl: t(result.localImagePath ? "local_image_export_path" : "product_image_url"), imageFormula: t(result.localImagePath ? "local_image_export_formula" : "image_image_url"), join: t("join_with_a_space") };
     const strip = $("div", { className: "ysc-excel-row" });
     // Literal text belongs to the selected style, independently for each cell.
     labels.anyText = t("any_text");
@@ -395,13 +395,13 @@
     if ((needs("unit") || needs("plainUnit")) && !result.unit) return t("fill_in_for_the_selected_column", { field: t("unit") });
     if (needs("price") && String(result.price || "").trim() && !YSCFormatter.priceNumber(result.price)) return t("enter_a_valid_price_for_the_selected_column");
     if ((needs("imageUrl") || needs("imageFormula")) && !result.localImagePath && !result.imageUrl) return t("image_url_was_not_found_configure_the_field");
-    for (const [key, title] of [["sheetLength", "length_m"], ["sheetWidth", "width_m"], ["sheetThickness", "thickness_mm"], ["sheetSize", "sheet_size_m"]]) {
+    if (!profile.format.optionalDimensions) for (const [key, title] of [["sheetLength", "length_m"], ["sheetWidth", "width_m"], ["sheetThickness", "thickness_mm"], ["sheetSize", "sheet_size_m"]]) {
       if (needs(key) && !YSCFormatter.excelValue(key, result, profile.format)) return t("fill_in_for_the_selected_column", { field: t(title) });
     }
     return "";
   }
   function sheetConfirmationRequired() {
-    if (!profile.format.sheet) return false;
+    if (!profile.format.sheet || profile.format.optionalDimensions) return false;
     const columns = YSCFormatter.excelColumns(profile.format);
     return ["unit", "sheetLength", "sheetWidth", "sheetSize"].some(key => columns.includes(key));
   }
@@ -485,6 +485,49 @@
     box.append($("label", { htmlFor: list.id, textContent: t("all_profiled_domains") }), list, explanation("hint_profiles"), details,
       folded("profile-tools", t("management_and_backup"), [status, adminProfiles, remove, $("div", { className: "ysc-backup-controls" }, backupControls)]));
     refresh(); return box;
+  }
+  const avcFieldLabels = { usage: "avc_usage", kind: "avc_kind", info: "avc_info", weight: "avc_weight", package: "avc_package" };
+  const avcUsageValues = ["Volume", "Sheet", "Rod", "Cover", "Banding", "Item"];
+  function avcControls() {
+    const columns = YSCFormatter.excelColumns(profile.format);
+    const used = Object.keys(avcFieldLabels).filter(key => columns.includes(key));
+    if (!used.length) return null;
+    // The remembered value belongs to the domain, so the next product on the same site reuses it.
+    const persist = key => {
+      const rule = profile.fields[key] || {};
+      YSCProfiles.saveField(profile, key, { value: String(rule.value ?? ""), source: rule.source || "manual" })
+        .catch(error => toast(t("save_error", { error: t(error.message) }), true));
+    };
+    const box = $("section", { id: "ysc-avc", className: "ysc-avc" });
+    box.append($("h3", { textContent: t("avc_properties") }));
+    for (const key of used) {
+      if (key === "usage") {
+        const select = $("select", { id: "ysc-value-usage" });
+        select.setAttribute("aria-label", t(avcFieldLabels.usage));
+        select.append($("option", { value: "", textContent: "—" }));
+        for (const value of avcUsageValues) select.append($("option", { value, textContent: value }));
+        select.append($("option", { value: "-", textContent: t("leave_unchanged") }));
+        select.value = avcUsageValues.includes(result.usage) || result.usage === "-" ? result.usage : "";
+        select.onchange = () => {
+          result.usage = select.value;
+          profile.fields.usage = { ...profile.fields.usage, source: "manual", value: select.value };
+          refreshPreview(); persist("usage");
+        };
+        box.append($("div", {}, [$("label", { htmlFor: select.id, textContent: t(avcFieldLabels.usage) }), select]));
+        continue;
+      }
+      const [label, field] = input(avcFieldLabels[key], result[key], value => {
+        result[key] = value;
+        profile.fields[key] = { ...profile.fields[key], value };
+        refreshPreview();
+      });
+      field.id = `ysc-value-${key}`; field.setAttribute("aria-label", t(avcFieldLabels[key]));
+      label.htmlFor = field.id;
+      field.addEventListener("change", () => persist(key));
+      box.append($("div", {}, [label, field]));
+    }
+    box.append(explanation("hint_avc_properties"));
+    return box;
   }
   function sheetControls() {
     const box = $("section", { className: "ysc-sheet" });
@@ -751,19 +794,21 @@
         panel.append($("label", { textContent: t("multiple_values_please_check", { title: t(title) }) }), choices);
       }
     }
-    panel.append(sheetControls(), $("hr", { className: "ysc-data-divider" }));
+    panel.append(sheetControls());
+    const avcBox = avcControls(); if (avcBox) panel.append(avcBox);
+    panel.append($("hr", { className: "ysc-data-divider" }));
     panel.append(workStyleControls(), previewElement());
     const imageSettingsBox = imageSettings();
     panel.append(styleSettings());
     if (result.candidates.article.length > 1) { const choices = $("select"); result.candidates.article.forEach(v => choices.append($("option", { textContent:v, value:v }))); choices.onchange = () => { result.article = choices.value; currentArticle.value = choices.value; refreshPreview(); }; panel.append($("label", { textContent:t("multiple_articles_choose_the_correct_one") }), choices); }
-    const rulesBox = folded("rules", t("advanced_extraction_rules"), [fieldEditor("article", t("article_sku")), fieldEditor("name", t("product_name")), fieldEditor("price", t("price")), fieldEditor("currency", t("currency")), fieldEditor("unit", t("unit_of_measure")), fieldEditor("imageUrl", t("product_image_url"))]);
+    const rulesBox = folded("rules", t("advanced_extraction_rules"), [fieldEditor("article", t("article_sku")), fieldEditor("name", t("product_name")), fieldEditor("price", t("price")), fieldEditor("currency", t("currency")), fieldEditor("unit", t("unit_of_measure")), fieldEditor("imageUrl", t("product_image_url")), ...Object.keys(avcFieldLabels).map(key => fieldEditor(key, t(avcFieldLabels[key])))]);
     panel.append(rulesBox);
     if (profile.format.sheet) {
       panel.querySelector("#ysc-rules").append(fieldEditor("sheetLength", profile.format.sheetRod ? t("bar_rod_length_2") : t("sheet_length")));
       if (!profile.format.sheetRod) panel.querySelector("#ysc-rules").append(fieldEditor("sheetWidth", t("sheet_width")), fieldEditor("sheetThickness", t("thickness_mm_2")));
     }
     panel.append(blacklistSettings());
-    const opts = [["replaceComma",t("replace_commas")],["normalizeSpaces",t("normalize_spaces")],["stripControls",t("remove_control_characters")],["uppercaseSupplier",t("uppercase_supplier")],["supplier",t("include_supplier")],["article",t("include_article")],["name",t("include_product_name")]]; const formatBox = $("section"); formatBox.append($("label", { textContent:t("formatting") })); opts.forEach(([key,label]) => { const cb = $("input", { type:"checkbox", checked: profile.format[key] ?? YSCFormatter.defaults[key] }); cb.onchange = async () => { profile.format[key] = cb.checked; try { await persistStyle(); refreshPreview(); } catch (error) { toast(t(error.message), true); } }; formatBox.append($("label", {}, [cb, document.createTextNode(` ${t(label)}`)])); });
+    const opts = [["replaceComma",t("replace_commas")],["normalizeSpaces",t("normalize_spaces")],["stripControls",t("remove_control_characters")],["uppercaseSupplier",t("uppercase_supplier")],["decimalDot",t("decimal_point_in_numbers")],["dimensionUnits",t("units_on_dimensions")],["dimensionInMillimetres",t("dimensions_in_millimetres")],["optionalDimensions",t("allow_empty_dimensions")],["supplier",t("include_supplier")],["article",t("include_article")],["name",t("include_product_name")]]; const formatBox = $("section"); formatBox.append($("label", { textContent:t("formatting") })); opts.forEach(([key,label]) => { const cb = $("input", { type:"checkbox", checked: profile.format[key] ?? YSCFormatter.defaults[key] }); cb.onchange = async () => { profile.format[key] = cb.checked; try { await persistStyle(); refreshPreview(); } catch (error) { toast(t(error.message), true); } }; formatBox.append($("label", {}, [cb, document.createTextNode(` ${t(label)}`)])); });
     const nextTarget = profile.format.excel ? (() => { try { return YSCFormatter.excelBlocks(outputFields(), profile.format)[nextExcelBlock]?.target; } catch (_) { return ""; } })() : "";
     const copyButton = $("button", { id: "ysc-copy", textContent:nextTarget ? t("copy_3", { target: nextTarget }) : t("copy_2") }); copyButton.onclick = copy; const save = $("button", { textContent:t("save_profile"), className:"secondary" }); save.onclick = async () => {
       try {
@@ -798,7 +843,7 @@
       $("p", { id: "ysc-help-name", textContent: "Y Supplier Clipboard" }),
       $("p", { id: "ysc-help-description", hidden: helpMode === "pro", textContent: t("supplier_clipboard_means_a_clipboard_for_supplier_data_the_extension") }),
       $("p", { id: "ysc-code-version", textContent: t("code_version", { version: chrome.runtime.getManifest().version }) }),
-      $("p", { id: "ysc-revision-date", textContent: t("revision_date", { date: "15.10.2026" }) }),
+      $("p", { id: "ysc-revision-date", textContent: t("revision_date", { date: "18.10.2026" }) }),
       checkUpdate,
       updateStatus,
       $("p", {}, [helpLink("readme_md_instructions", chrome.runtime.getURL("ui/help.html?doc=readme"))]),
