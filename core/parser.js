@@ -146,23 +146,23 @@ globalThis.YSCParser = (() => {
     const hostnameSupplier = hostnameParts[0]?.toLowerCase() === "www" ? hostnameParts[1] : hostnameParts[0];
     const configuredSupplier = /^www$/i.test(String(profile.supplier || "").trim()) ? "" : profile.supplier;
     const supplier = removeBlocked(configuredSupplier || sourceValue(fields.supplier, "supplier", product) || hostnameSupplier, profile.blacklist);
-    // AVC palette fields. Usage follows the unit of measure first, then the sheet/rod mode, unless a rule overrides it.
+    // The type of the position follows the unit of measure. When the unit says nothing (pieces, packages) the
+    // sheet or rod mode of the domain decides, and a plain product stays an item.
+    const detectedUsage = YSCFormatter.usages[YSCFormatter.detectUsage(unitDefaulted ? "" : unit)];
+    const usageAuto = detectedUsage === "Item" && profile.format?.sheet ? (profile.format.sheetRod ? "Rod" : "Sheet") : detectedUsage;
+    // AVC palette fields. A rule or a manual choice overrides the automatic type.
     const extras = Object.fromEntries(extraFields.map(key => {
       const rule = { enabled: true, selector: "", regex: "", attribute: "", value: "", ...(fields[key] || {}) };
+      // The type is derived, not scraped, so a leftover rule can never switch the field off.
+      if (key === "usage" && (!rule.source || rule.source === "auto")) return [key, usageAuto];
       if (!rule.enabled) return [key, ""];
-      if (key === "usage" && (!rule.source || rule.source === "auto")) {
-        const detected = YSCFormatter.usages[YSCFormatter.detectUsage(unit)];
-        const byMode = profile.format?.sheet ? (profile.format.sheetRod ? "Rod" : "Sheet") : "Item";
-        // A unit that says nothing (pieces, packages) leaves the decision to the sheet or rod mode of the domain.
-        return [key, detected === "Item" ? byMode : detected];
-      }
       // Automatic detection for the palette fields reads the product metadata, where shops keep the description and the category.
       const source = !rule.source || rule.source === "auto" ? "jsonld" : rule.source;
       return [key, removeBlocked(sourceValue({ ...rule, source }, key, product), profile.blacklist)];
     }));
     const sheetLength = profile.format?.sheet ? valuesFor("sheetLength") : [], sheetWidth = profile.format?.sheet ? valuesFor("sheetWidth") : [];
     const sheetThickness = profile.format?.sheet ? [...new Set(valuesFor("sheetThickness").map(YSCFormatter.thicknessMm).filter(Boolean))] : [];
-    return { ...extras, supplier, article: articleValues[0] || "", name: nameValues[0] || "", price: priceValues[0] || "", currency: currencyValues.length === 1 ? currencyValues[0] : "", unit, unitDefaulted, imageUrl: imageValues[0] || "", sheetLength: sheetLength[0] || "", sheetWidth: sheetWidth[0] || "", sheetThickness: sheetThickness[0] || "", candidates: { article: articleValues, name: nameValues, price: priceValues, currency: currencyValues, unit: unitValues, imageUrl: imageValues, sheetLength, sheetWidth, sheetThickness }, productDetected: Boolean(product.name || text(document.querySelector("h1"))) };
+    return { ...extras, usageAuto, supplier, article: articleValues[0] || "", name: nameValues[0] || "", price: priceValues[0] || "", currency: currencyValues.length === 1 ? currencyValues[0] : "", unit, unitDefaulted, imageUrl: imageValues[0] || "", sheetLength: sheetLength[0] || "", sheetWidth: sheetWidth[0] || "", sheetThickness: sheetThickness[0] || "", candidates: { article: articleValues, name: nameValues, price: priceValues, currency: currencyValues, unit: unitValues, imageUrl: imageValues, sheetLength, sheetWidth, sheetThickness }, productDetected: Boolean(product.name || text(document.querySelector("h1"))) };
   }
   return { parse, candidates, safeQuery, text, cleanArticle, removeBlocked, imageUrl, priceText, priceCurrency, extraFields };
 })();

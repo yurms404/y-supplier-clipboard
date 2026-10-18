@@ -292,6 +292,8 @@
   "up_to_date": "Jums ir jaunākā versija {version}.",
   "avc_properties": "A>V>C> rekvizīti",
   "avc_usage": "Pielietojums",
+  "usage_auto": "Automātiski ({type})",
+  "usage_hint": "Preces mērvienība: {unit} → {type}",
   "avc_kind": "Kategorija",
   "avc_info": "Apraksts",
   "avc_weight": "Svars / blīvums",

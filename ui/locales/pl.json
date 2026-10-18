@@ -292,6 +292,8 @@
   "up_to_date": "Masz najnowszą wersję {version}.",
   "avc_properties": "Właściwości A>V>C>",
   "avc_usage": "Przeznaczenie",
+  "usage_auto": "Automatycznie ({type})",
+  "usage_hint": "Jednostka produktu: {unit} → {type}",
   "avc_kind": "Kategoria",
   "avc_info": "Opis",
   "avc_weight": "Waga / gęstość",

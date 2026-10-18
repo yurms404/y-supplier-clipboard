@@ -292,6 +292,8 @@
   "up_to_date": "Kasutate uusimat versiooni {version}.",
   "avc_properties": "A>V>C> omadused",
   "avc_usage": "Otstarve",
+  "usage_auto": "Automaatselt ({type})",
+  "usage_hint": "Toote ühik: {unit} → {type}",
   "avc_kind": "Kategooria",
   "avc_info": "Kirjeldus",
   "avc_weight": "Kaal / tihedus",

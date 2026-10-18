@@ -292,6 +292,8 @@
   "up_to_date": "You have the latest version, {version}.",
   "avc_properties": "A>V>C> properties",
   "avc_usage": "Usage",
+  "usage_auto": "Automatic ({type})",
+  "usage_hint": "Product unit: {unit} → {type}",
   "avc_kind": "Kind / type / sort",
   "avc_info": "Info / description",
   "avc_weight": "Density / weight",

@@ -113,15 +113,19 @@ const withUnit = value => parser.parse({ fields: { unit: { enabled: true, source
 assert.equal(parser.parse().usage, "Item", "A product outside sheet mode is an item");
 assert.equal(parser.parse({ format: { sheet: true } }).usage, "Sheet", "With no useful unit the sheet mode decides");
 assert.equal(parser.parse({ format: { sheet: true, sheetRod: true } }).usage, "Rod", "Rod mode overrides sheet mode");
-assert.equal(withUnit("пог.м").usage, "Rod", "Running metres need no mode to be recognised");
-assert.equal(withUnit("м²").usage, "Sheet", "A square metre unit means a sheet material");
-assert.equal(withUnit("лист").usage, "Sheet", "A sheet unit means a sheet material");
-assert.equal(withUnit("м3").usage, "Volume", "A cubic metre unit means a volume material");
-assert.equal(withUnit("шт").usage, "Item", "A piece unit means an item");
-assert.equal(withUnit("").usage, "Item", "An unknown unit falls back to an item");
+// Shops write the unit in many ways, so every notation that appears in the wild is checked here.
+for (const [unit, usage] of [
+  ["м²", "Sheet"], ["м2", "Sheet"], ["кв.м", "Sheet"], ["м.кв.", "Sheet"], ["m2", "Sheet"], ["sqm", "Sheet"], ["лист", "Sheet"],
+  ["пог.м", "Rod"], ["пог. м", "Rod"], ["п.м.", "Rod"], ["м.п.", "Rod"], ["м", "Rod"], ["m", "Rod"], ["хлист", "Rod"], ["погонний метр", "Rod"],
+  ["м3", "Volume"], ["m³", "Volume"], ["куб.м", "Volume"], ["cbm", "Volume"],
+  ["шт", "Item"], ["шт.", "Item"], ["уп", "Item"], ["мм", "Item"], ["см", "Item"], ["", "Item"]
+]) assert.equal(withUnit(unit).usage, usage, `The unit ${unit || "(empty)"} means ${usage}`);
 assert.equal(parser.parse({ format: { sheet: true }, fields: { unit: { enabled: true, source: "manual", value: "шт" } } }).usage, "Sheet", "Pieces leave the decision to the sheet mode");
 const covered = parser.parse({ format: { sheet: true }, fields: { usage: { enabled: true, source: "manual", value: "Cover" } } });
 assert.equal(covered.usage, "Cover", "A manual value wins over the unit of measure");
+assert.equal(covered.usageAuto, "Sheet", "The automatic type stays visible under a manual choice");
+assert.equal(parser.parse({ fields: { usage: { enabled: false } } }).usage, "Item", "A leftover rule cannot switch the type off, because it is derived rather than scraped");
+assert.equal(parser.parse({ fields: { usage: { enabled: true, source: "manual", value: "" } } }).usage, "", "An empty manual value is still honoured by the parser");
 assert.equal(parser.parse({ fields: { weight: { enabled: true, source: "manual", value: "0.005" } } }).weight, "0.005");
 assert.equal(parser.parse({ fields: { package: { enabled: true, source: "manual", value: "100" } } }).package, "100");
 assert.equal(parser.parse({ fields: { kind: { enabled: true, source: "manual", value: "Фурнитура" } } }).kind, "Фурнитура");

@@ -3,13 +3,17 @@ globalThis.YSCFormatter = (() => {
   const defaults = { supplier: true, article: true, name: true, replaceComma: true, normalizeSpaces: true, stripControls: true, uppercaseSupplier: true, decimalDot: false, dimensionUnits: false, dimensionInMillimetres: false, optionalDimensions: false };
   // A>V>C> usage codes. The order is the receiver's own enum and must not be reshuffled.
   const usages = ["Volume", "Sheet", "Rod", "Cover", "Banding", "Item"];
-  // The unit of measure is the best hint about how the receiver should cost the position.
+  // The unit of measure is the best hint about how the receiver should cost the position. Shops write it in
+  // many ways, so the value is normalised first: "м. кв.", "м²" and "кв.м" all mean a square metre.
   function detectUsage(unit) {
-    const value = String(unit || "").toLowerCase().trim().replace(/²/g, "2").replace(/³/g, "3").replace(/[\s.\^]/g, "");
-    if (/^(?:(?:mm|cm|m|мм|см|м|ft|in)3|кубм|cbm|кубометр|кубометрів|кубометров)$/.test(value)) return 0;
-    if (/^(?:(?:mm|cm|m|мм|см|м|ft|in)2|квм|sqm|sqft|sqin|лист|листа|листи|листів|листов|sheet|sheets)$/.test(value)) return 1;
-    if (/^(?:mm|cm|m|мм|см|м|ft|in|lm|погм|пм|мп|погоннийметр|погонныйметр|хлист|хлыст|хлиста|хлыста|rod)$/.test(value)) return 2;
-    return 5; // Pieces, packages and unrecognised units use the basic Item form.
+    const value = String(unit || "").toLowerCase().replace(/²/g, "2").replace(/³/g, "3").replace(/[\s.\u00a0\u202f^/]/g, "");
+    if (!value) return 5;
+    // A bare metre is a running metre ("м", "п.м.", "пог. м"), but "мм" and "см" are lengths of the piece
+    // itself and stay items. The rod test runs first because "хлист" contains "лист".
+    if (/(?:пог|погон|хлист|хлыст|rod|lm)/.test(value) || /^(?:м|m|мп|пм)$/.test(value)) return 2;
+    if (/(?:м3|m3|куб|cbm)/.test(value)) return 0;
+    if (/(?:м2|m2|кв|sqm|sqft|sqin|лист|sheet)/.test(value)) return 1;
+    return 5; // Pieces, packages, weights and unrecognised units use the basic Item form.
   }
   // A>V>C> reuses the name as a block name, so forbidden characters are replaced rather than dropped.
   const avcName = value => String(value ?? "").replace(/[\u0000-\u001f\u007f<>/\\":;?*|,=`]/g, "-").replace(/\s+/g, " ").trim().slice(0, 255);

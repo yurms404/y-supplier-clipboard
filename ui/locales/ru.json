@@ -292,6 +292,8 @@
   "up_to_date": "У вас установлена последняя версия {version}.",
   "avc_properties": "Свойства A>V>C>",
   "avc_usage": "Назначение",
+  "usage_auto": "Автоматически ({type})",
+  "usage_hint": "Единица товара: {unit} → {type}",
   "avc_kind": "Категория",
   "avc_info": "Описание",
   "avc_weight": "Вес / плотность",

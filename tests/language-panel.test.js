@@ -632,10 +632,19 @@ const copied = [];
   panel = root.querySelector("#ysc-panel");
   const paletteBox = panel.querySelector("#ysc-avc");
   assert.ok(paletteBox, "The palette style reveals its property fields");
-  assert.equal(paletteBox.querySelector("#ysc-value-usage").tagName, "SELECT");
-  assert.equal(paletteBox.querySelectorAll("option").length, 8, "Usage offers the six palette values, a dash and an empty choice");
+  const usageChoice = paletteBox.querySelector("#ysc-value-usage");
+  assert.equal(usageChoice.tagName, "SELECT");
+  const usageOptions = usageChoice.children;
+  assert.equal(usageOptions.length, 8, "Usage offers automatic detection, the six palette values and a dash");
+  assert.equal(usageOptions[0].value, "auto", "The automatic choice comes first");
+  assert.match(usageOptions[0].textContent, /^\S.*\([A-Za-z]+\)$/, "The automatic choice names the detected type");
+  assert.equal(usageChoice.value, "auto", "The type is detected automatically until the user says otherwise");
+  const usageNote = paletteBox.querySelector(".ysc-usage-note");
+  assert.ok(usageNote, "The palette shows which unit the automatic type came from");
+  assert.match(usageNote.textContent, /→\s*[A-Za-z]+$/, "The status line ends with the type it produced");
+  assert.ok(!usageNote.hidden, "The status line stays visible in every help mode");
   for (const key of ["kind", "info", "weight", "package"]) assert.ok(paletteBox.querySelector(`#ysc-value-${key}`), `${key} is editable in the panel`);
-  const usageChoice = paletteBox.querySelector("#ysc-value-usage"); usageChoice.value = "Sheet"; usageChoice.onchange();
+  usageChoice.value = "Sheet"; usageChoice.onchange();
   for (const [key, value] of [["article", "29699"], ["price", "657"], ["kind", "ДСП"], ["info", "Плита, шліфована"], ["weight", "11,2"], ["package", "1"]]) {
     const field = panel.querySelector(`#ysc-value-${key}`); field.value = value; field.listeners.input();
   }

@@ -502,18 +502,28 @@
     box.append($("h3", { textContent: t("avc_properties") }));
     for (const key of used) {
       if (key === "usage") {
+        let rule = profile.fields.usage || {};
+        // A half-set rule from an older version (an empty manual value) falls back to automatic instead of copying nothing.
+        if (["manual", "fixed"].includes(rule.source) && !(avcUsageValues.includes(rule.value) || rule.value === "-")) { rule = { source: "auto", value: "" }; profile.fields.usage = rule; }
+        const manual = ["manual", "fixed"].includes(rule.source), shownUnit = result.unitDefaulted ? "" : result.unit;
         const select = $("select", { id: "ysc-value-usage" });
         select.setAttribute("aria-label", t(avcFieldLabels.usage));
-        select.append($("option", { value: "", textContent: "—" }));
+        // The receiver works out the type itself, so automatic detection is the first and default choice.
+        select.append($("option", { value: "auto", textContent: t("usage_auto", { type: result.usageAuto }) }));
         for (const value of avcUsageValues) select.append($("option", { value, textContent: value }));
         select.append($("option", { value: "-", textContent: t("leave_unchanged") }));
-        select.value = avcUsageValues.includes(result.usage) || result.usage === "-" ? result.usage : "";
+        select.value = manual ? rule.value : "auto";
         select.onchange = () => {
-          result.usage = select.value;
-          profile.fields.usage = { ...profile.fields.usage, source: "manual", value: select.value };
+          const automatic = select.value === "auto";
+          // Automatic forgets the remembered value, so the unit of measure decides again for the next product too.
+          profile.fields.usage = automatic ? { source: "auto", value: "" } : { source: "manual", value: select.value };
+          result.usage = automatic ? result.usageAuto : select.value;
           refreshPreview(); persist("usage");
         };
         box.append($("div", {}, [$("label", { htmlFor: select.id, textContent: t(avcFieldLabels.usage) }), select]));
+        // Names the single place the automatic type comes from, so a wrong value is easy to trace back to the unit.
+        // It stays visible in every help mode, because it is status rather than an explanation.
+        box.append($("p", { className: "ysc-usage-note", textContent: t("usage_hint", { unit: shownUnit || "—", type: result.usageAuto }) }));
         continue;
       }
       const [label, field] = input(avcFieldLabels[key], result[key], value => {
@@ -801,7 +811,8 @@
     const imageSettingsBox = imageSettings();
     panel.append(styleSettings());
     if (result.candidates.article.length > 1) { const choices = $("select"); result.candidates.article.forEach(v => choices.append($("option", { textContent:v, value:v }))); choices.onchange = () => { result.article = choices.value; currentArticle.value = choices.value; refreshPreview(); }; panel.append($("label", { textContent:t("multiple_articles_choose_the_correct_one") }), choices); }
-    const rulesBox = folded("rules", t("advanced_extraction_rules"), [fieldEditor("article", t("article_sku")), fieldEditor("name", t("product_name")), fieldEditor("price", t("price")), fieldEditor("currency", t("currency")), fieldEditor("unit", t("unit_of_measure")), fieldEditor("imageUrl", t("product_image_url")), ...Object.keys(avcFieldLabels).map(key => fieldEditor(key, t(avcFieldLabels[key])))]);
+    // The type of the position has its own automatic control in the palette section, so it needs no rule here.
+    const rulesBox = folded("rules", t("advanced_extraction_rules"), [fieldEditor("article", t("article_sku")), fieldEditor("name", t("product_name")), fieldEditor("price", t("price")), fieldEditor("currency", t("currency")), fieldEditor("unit", t("unit_of_measure")), fieldEditor("imageUrl", t("product_image_url")), ...Object.keys(avcFieldLabels).filter(key => key !== "usage").map(key => fieldEditor(key, t(avcFieldLabels[key])))]);
     panel.append(rulesBox);
     if (profile.format.sheet) {
       panel.querySelector("#ysc-rules").append(fieldEditor("sheetLength", profile.format.sheetRod ? t("bar_rod_length_2") : t("sheet_length")));

@@ -292,6 +292,8 @@
   "up_to_date": "У вас встановлено найновішу версію {version}.",
   "avc_properties": "Властивості A>V>C>",
   "avc_usage": "Призначення",
+  "usage_auto": "Автоматично ({type})",
+  "usage_hint": "Одиниця товару: {unit} → {type}",
   "avc_kind": "Категорія",
   "avc_info": "Опис",
   "avc_weight": "Вага / густина",
