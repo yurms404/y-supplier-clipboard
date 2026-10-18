@@ -110,9 +110,8 @@ context.location = { hostname: "example.com", href: "https://example.com/p" };
 vm.runInContext(fs.readFileSync("core/parser.js", "utf8"), context);
 const parser = context.YSCParser;
 const withUnit = value => parser.parse({ fields: { unit: { enabled: true, source: "manual", value } } });
-assert.equal(parser.parse().usage, "Item", "A product outside sheet mode is an item");
-assert.equal(parser.parse({ format: { sheet: true } }).usage, "Sheet", "With no useful unit the sheet mode decides");
-assert.equal(parser.parse({ format: { sheet: true, sheetRod: true } }).usage, "Rod", "Rod mode overrides sheet mode");
+assert.equal(parser.parse().usage, "Item", "A product whose unit says nothing is an item");
+assert.equal(parser.parse({ format: { sheet: true } }).usage, "Item", "A stored sheet flag no longer stands in for the type");
 // Shops write the unit in many ways, so every notation that appears in the wild is checked here.
 for (const [unit, usage] of [
   ["м²", "Sheet"], ["м2", "Sheet"], ["кв.м", "Sheet"], ["м.кв.", "Sheet"], ["m2", "Sheet"], ["sqm", "Sheet"], ["лист", "Sheet"],
@@ -120,8 +119,8 @@ for (const [unit, usage] of [
   ["м3", "Volume"], ["m³", "Volume"], ["куб.м", "Volume"], ["cbm", "Volume"],
   ["шт", "Item"], ["шт.", "Item"], ["уп", "Item"], ["мм", "Item"], ["см", "Item"], ["", "Item"]
 ]) assert.equal(withUnit(unit).usage, usage, `The unit ${unit || "(empty)"} means ${usage}`);
-assert.equal(parser.parse({ format: { sheet: true }, fields: { unit: { enabled: true, source: "manual", value: "шт" } } }).usage, "Sheet", "Pieces leave the decision to the sheet mode");
-const covered = parser.parse({ format: { sheet: true }, fields: { usage: { enabled: true, source: "manual", value: "Cover" } } });
+assert.equal(parser.parse({ fields: { unit: { enabled: true, source: "manual", value: "шт" }, usage: { enabled: true, source: "manual", value: "Sheet" } } }).usage, "Sheet", "A remembered type wins over a piece unit");
+const covered = parser.parse({ fields: { unit: { enabled: true, source: "manual", value: "лист" }, usage: { enabled: true, source: "manual", value: "Cover" } } });
 assert.equal(covered.usage, "Cover", "A manual value wins over the unit of measure");
 assert.equal(covered.usageAuto, "Sheet", "The automatic type stays visible under a manual choice");
 assert.equal(parser.parse({ fields: { usage: { enabled: false } } }).usage, "Item", "A leftover rule cannot switch the type off, because it is derived rather than scraped");

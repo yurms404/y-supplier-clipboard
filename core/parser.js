@@ -148,28 +148,31 @@ globalThis.YSCParser = (() => {
     const valuesFor = key => cleanValues(fields[key]?.source === "auto" || !fields[key] ? candidates(key, profile.blacklist) : [sourceValue(fields[key], key, product)].filter(Boolean));
     const priceValues = valuesFor("price").map(YSCFormatter.priceNumber).filter(Boolean), unitValues = valuesFor("unit"), imageValues = valuesFor("imageUrl");
     const currencyValues = valuesFor("currency").map(YSCFormatter.currencyCode).filter(Boolean);
-    const unitDefaulted = !unitValues.length && !profile.format?.sheet && fields.unit?.enabled !== false;
+    const usageRule = fields.usage || {}, manualUsage = ["manual", "fixed"].includes(usageRule.source);
+    // A sheet or rod position is measured by its size, so its unit is never invented as pieces.
+    const unitDefaulted = !unitValues.length && !(manualUsage && ["Sheet", "Rod"].includes(String(usageRule.value))) && fields.unit?.enabled !== false;
     const unit = unitValues[0] || (unitDefaulted ? "шт." : "");
     const hostnameParts = location.hostname.split(".");
     const hostnameSupplier = hostnameParts[0]?.toLowerCase() === "www" ? hostnameParts[1] : hostnameParts[0];
     const configuredSupplier = /^www$/i.test(String(profile.supplier || "").trim()) ? "" : profile.supplier;
     const supplier = removeBlocked(configuredSupplier || sourceValue(fields.supplier, "supplier", product) || hostnameSupplier, profile.blacklist);
-    // The type of the position follows the unit of measure. When the unit says nothing (pieces, packages) the
-    // sheet or rod mode of the domain decides, and a plain product stays an item.
-    const detectedUsage = YSCFormatter.usages[YSCFormatter.detectUsage(unitDefaulted ? "" : unit)];
-    const usageAuto = detectedUsage === "Item" && profile.format?.sheet ? (profile.format.sheetRod ? "Rod" : "Sheet") : detectedUsage;
-    // AVC palette fields. A rule or a manual choice overrides the automatic type.
+    // The type of the position follows the unit of measure, and a remembered manual choice overrides it.
+    const usageAuto = YSCFormatter.usages[YSCFormatter.detectUsage(unitDefaulted ? "" : unit)];
+    const usage = manualUsage ? String(usageRule.value ?? "") : usageAuto;
+    // The type owns the size fields: a sheet has a width, a rod only a length, and anything else has no size at all.
+    const sheetMode = usage === "Sheet" || usage === "Rod", rodMode = usage === "Rod";
+    // AVC palette fields.
     const extras = Object.fromEntries(extraFields.map(key => {
       const rule = { enabled: true, selector: "", regex: "", attribute: "", value: "", ...(fields[key] || {}) };
       // The type is derived, not scraped, so a leftover rule can never switch the field off.
-      if (key === "usage" && (!rule.source || rule.source === "auto")) return [key, usageAuto];
+      if (key === "usage") return [key, usage];
       if (!rule.enabled) return [key, ""];
       // Automatic detection for the palette fields reads the product metadata, where shops keep the description and the category.
       const source = !rule.source || rule.source === "auto" ? "jsonld" : rule.source;
       return [key, removeBlocked(sourceValue({ ...rule, source }, key, product), profile.blacklist)];
     }));
-    const sheetLength = profile.format?.sheet ? valuesFor("sheetLength") : [], sheetWidth = profile.format?.sheet ? valuesFor("sheetWidth") : [];
-    const sheetThickness = profile.format?.sheet ? [...new Set(valuesFor("sheetThickness").map(YSCFormatter.thicknessMm).filter(Boolean))] : [];
+    const sheetLength = sheetMode ? valuesFor("sheetLength") : [], sheetWidth = sheetMode && !rodMode ? valuesFor("sheetWidth") : [];
+    const sheetThickness = sheetMode ? [...new Set(valuesFor("sheetThickness").map(YSCFormatter.thicknessMm).filter(Boolean))] : [];
     return { ...extras, usageAuto, supplier, article: articleValues[0] || "", name: nameValues[0] || "", price: priceValues[0] || "", currency: currencyValues.length === 1 ? currencyValues[0] : "", unit, unitDefaulted, imageUrl: imageValues[0] || "", sheetLength: sheetLength[0] || "", sheetWidth: sheetWidth[0] || "", sheetThickness: sheetThickness[0] || "", candidates: { article: articleValues, name: nameValues, price: priceValues, currency: currencyValues, unit: unitValues, imageUrl: imageValues, sheetLength, sheetWidth, sheetThickness }, productDetected: Boolean(product.name || text(document.querySelector("h1"))) };
   }
   return { parse, candidates, safeQuery, text, cleanArticle, removeBlocked, imageUrl, priceText, priceCurrency, extraFields };

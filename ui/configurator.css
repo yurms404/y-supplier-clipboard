@@ -92,7 +92,8 @@
 #ysc-panel .ysc-sheet-meta label { font-size:12px; }
 #ysc-panel .ysc-avc { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:0 8px; align-items:end; }
 #ysc-panel .ysc-avc h3, #ysc-panel .ysc-avc .ysc-explanation { grid-column:1 / -1; }
-#ysc-panel .ysc-avc .ysc-usage-note { grid-column:1 / -1; margin:5px 0 9px; color:var(--ysc-text); font-size:12px; line-height:1.4; overflow-wrap:anywhere; }
+#ysc-panel .ysc-avc .ysc-usage-note { grid-column:1 / -1; }
+#ysc-panel .ysc-usage-note { margin:5px 0 9px; color:var(--ysc-text); font-size:12px; line-height:1.4; overflow-wrap:anywhere; }
 #ysc-panel .ysc-avc > div { min-width:0; }
 #ysc-panel .ysc-avc label { font-size:12px; }
 #ysc-panel .ysc-field-picker { position:relative; display:block; width:100%; min-width:0; padding:0; margin:0; }

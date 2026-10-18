@@ -1,6 +1,6 @@
 {
   "name": "y-supplier-clipboard",
-  "version": "3.1.3",
+  "version": "3.1.4",
   "license": "MIT",
   "private": true,
   "scripts": { "test": "node tests/formatter.test.js && node tests/parser.test.js && node tests/excel.test.js && node tests/blacklist.test.js && node tests/i18n.test.js && node tests/sheet.test.js && node tests/avc.test.js && node tests/language-panel.test.js && node tests/local-images.test.js && node tests/help.test.js", "check": "node --check background.js && node --check content.js && node --check core/parser.js && node --check storage/profiles.js && node --check storage/work-styles.js && node --check storage/local-images.js && node --check ui/element-picker.js && node --check ui/local-images.js && node --check ui/i18n.js && node --check ui/help.js" }

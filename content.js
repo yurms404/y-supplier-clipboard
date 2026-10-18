@@ -250,6 +250,11 @@
     return preview;
   }
   function refreshPreview() {
+    // Every edit passes through here, so the type and the size fields always match what the panel shows.
+    const wasSheet = Boolean(profile.format.sheet), wasRod = Boolean(profile.format.sheetRod);
+    syncUsage();
+    // A changed unit of measure can change the type, and with it which size fields exist, so the panel is redrawn.
+    if (wasSheet !== Boolean(profile.format.sheet) || wasRod !== Boolean(profile.format.sheetRod)) return render();
     nextExcelBlock = 0;
     panel.querySelector(".ysc-preview").replaceWith(previewElement());
     panel.querySelector("#ysc-quick-preview").textContent = quickText();
@@ -488,44 +493,70 @@
   }
   const avcFieldLabels = { usage: "avc_usage", kind: "avc_kind", info: "avc_info", weight: "avc_weight", package: "avc_package" };
   const avcUsageValues = YSCFormatter.usages;
+  // The remembered value belongs to the domain, so the next product on the same site reuses it.
+  function persistField(key) {
+    const rule = profile.fields[key] || {};
+    YSCProfiles.saveField(profile, key, { value: String(rule.value ?? ""), source: rule.source || "manual" })
+      .catch(error => toast(t("save_error", { error: t(error.message) }), true));
+  }
+  // The type owns the size fields. It follows the unit of measure, and only a remembered choice overrides it,
+  // so nothing else has to be switched on by hand to make the length and width appear.
+  function syncUsage() {
+    const rule = profile.fields.usage || {}, manual = ["manual", "fixed"].includes(rule.source);
+    if (!manual) result.usageAuto = YSCFormatter.usages[YSCFormatter.detectUsage(result.unitDefaulted ? "" : result.unit)];
+    result.usage = manual ? String(rule.value ?? "") : result.usageAuto;
+    const rod = result.usage === "Rod", sheet = rod || result.usage === "Sheet";
+    profile.format.sheet = sheet;
+    profile.format.sheetRod = rod;
+    // A position that is neither a sheet nor a rod has no size, so a leftover one is never exported.
+    if (!sheet) { result.sheetLength = ""; result.sheetWidth = ""; result.sheetThickness = ""; result.sheetConfirmed = false; }
+  }
+  // Changing the type re-reads the size fields, because only a sheet or a rod position has any.
+  function applyUsage() {
+    for (const key of ["sheetLength", "sheetWidth", "sheetThickness"]) profile.fields[key] ||= { enabled: true, source: "auto", selector: "" };
+    const parsed = YSCParser.parse(profile);
+    result.sheetLength = parsed.sheetLength || ""; result.sheetWidth = parsed.sheetWidth || ""; result.sheetThickness = parsed.sheetThickness || "";
+    result.usageAuto = parsed.usageAuto;
+    if (result.unitDefaulted || !result.unit && !result.confirmed?.unit) { result.unit = parsed.unit; result.unitDefaulted = parsed.unitDefaulted; }
+    result.sheetConfirmed = false;
+    syncUsage();
+    nextExcelBlock = 0; render();
+    persistField("usage");
+  }
+  // One control for the position type: automatic detection from the unit of measure, or a remembered choice per domain.
+  function usageControl() {
+    let rule = profile.fields.usage || {};
+    // A half-set rule from an older version (an empty manual value) falls back to automatic instead of copying nothing.
+    if (["manual", "fixed"].includes(rule.source) && !(avcUsageValues.includes(rule.value) || rule.value === "-")) { rule = { source: "auto", value: "" }; profile.fields.usage = rule; }
+    const manual = ["manual", "fixed"].includes(rule.source), shownUnit = result.unitDefaulted ? "" : result.unit;
+    const select = $("select", { id: "ysc-value-usage" });
+    select.setAttribute("aria-label", t(avcFieldLabels.usage));
+    // The receiver works out the type itself, so automatic detection is the first and default choice.
+    select.append($("option", { value: "auto", textContent: t("usage_auto", { type: result.usageAuto }) }));
+    for (const value of avcUsageValues) select.append($("option", { value, textContent: `${value} — ${t(`usage_${value.toLowerCase()}`)}` }));
+    select.append($("option", { value: "-", textContent: t("leave_unchanged") }));
+    select.value = manual ? rule.value : "auto";
+    select.onchange = () => {
+      const automatic = select.value === "auto";
+      // Automatic forgets the remembered value, so the unit of measure decides again for the next product too.
+      profile.fields.usage = automatic ? { source: "auto", value: "" } : { source: "manual", value: select.value };
+      applyUsage();
+    };
+    // Names the single place the automatic type comes from, so a wrong value is easy to trace back to the unit,
+    // and it stays visible in every help mode, because it is status rather than an explanation.
+    return [
+      $("div", {}, [$("label", { htmlFor: select.id, textContent: t(avcFieldLabels.usage) }), select]),
+      $("p", { className: "ysc-usage-note", textContent: t("usage_hint", { unit: shownUnit || "—", type: result.usageAuto }) })
+    ];
+  }
   function avcControls() {
     const columns = YSCFormatter.excelColumns(profile.format);
     const used = Object.keys(avcFieldLabels).filter(key => columns.includes(key));
     if (!used.length) return null;
-    // The remembered value belongs to the domain, so the next product on the same site reuses it.
-    const persist = key => {
-      const rule = profile.fields[key] || {};
-      YSCProfiles.saveField(profile, key, { value: String(rule.value ?? ""), source: rule.source || "manual" })
-        .catch(error => toast(t("save_error", { error: t(error.message) }), true));
-    };
     const box = $("section", { id: "ysc-avc", className: "ysc-avc" });
     box.append($("h3", { textContent: t("avc_properties") }));
     for (const key of used) {
-      if (key === "usage") {
-        let rule = profile.fields.usage || {};
-        // A half-set rule from an older version (an empty manual value) falls back to automatic instead of copying nothing.
-        if (["manual", "fixed"].includes(rule.source) && !(avcUsageValues.includes(rule.value) || rule.value === "-")) { rule = { source: "auto", value: "" }; profile.fields.usage = rule; }
-        const manual = ["manual", "fixed"].includes(rule.source), shownUnit = result.unitDefaulted ? "" : result.unit;
-        const select = $("select", { id: "ysc-value-usage" });
-        select.setAttribute("aria-label", t(avcFieldLabels.usage));
-        // The receiver works out the type itself, so automatic detection is the first and default choice.
-        select.append($("option", { value: "auto", textContent: t("usage_auto", { type: result.usageAuto }) }));
-        for (const value of avcUsageValues) select.append($("option", { value, textContent: value }));
-        select.append($("option", { value: "-", textContent: t("leave_unchanged") }));
-        select.value = manual ? rule.value : "auto";
-        select.onchange = () => {
-          const automatic = select.value === "auto";
-          // Automatic forgets the remembered value, so the unit of measure decides again for the next product too.
-          profile.fields.usage = automatic ? { source: "auto", value: "" } : { source: "manual", value: select.value };
-          result.usage = automatic ? result.usageAuto : select.value;
-          refreshPreview(); persist("usage");
-        };
-        box.append($("div", {}, [$("label", { htmlFor: select.id, textContent: t(avcFieldLabels.usage) }), select]));
-        // Names the single place the automatic type comes from, so a wrong value is easy to trace back to the unit.
-        // It stays visible in every help mode, because it is status rather than an explanation.
-        box.append($("p", { className: "ysc-usage-note", textContent: t("usage_hint", { unit: shownUnit || "—", type: result.usageAuto }) }));
-        continue;
-      }
+      if (key === "usage") { box.append(...usageControl()); continue; }
       const [label, field] = input(avcFieldLabels[key], result[key], value => {
         result[key] = value;
         profile.fields[key] = { ...profile.fields[key], value };
@@ -533,7 +564,7 @@
       });
       field.id = `ysc-value-${key}`; field.setAttribute("aria-label", t(avcFieldLabels[key]));
       label.htmlFor = field.id;
-      field.addEventListener("change", () => persist(key));
+      field.addEventListener("change", () => persistField(key));
       box.append($("div", {}, [label, field]));
     }
     box.append(explanation("hint_avc_properties"));
@@ -541,24 +572,9 @@
   }
   function sheetControls() {
     const box = $("section", { className: "ysc-sheet" });
-    const enabled = $("input", { id: "ysc-sheet-enabled", type: "checkbox", checked: Boolean(profile.format.sheet && !profile.format.sheetRod) });
-    const rod = $("input", { id: "ysc-rod-enabled", type: "checkbox", checked: Boolean(profile.format.sheet && profile.format.sheetRod) });
-    const changeMode = (active, isRod) => {
-      profile.format.sheet = active;
-      profile.format.sheetRod = active && isRod;
-      for (const key of ["sheetLength", "sheetWidth", "sheetThickness"]) profile.fields[key] ||= { enabled: true, source: "auto", selector: "" };
-      const parsed = YSCParser.parse(profile);
-      result.sheetLength = parsed.sheetLength || ""; result.sheetWidth = parsed.sheetWidth || ""; result.sheetThickness = parsed.sheetThickness || "";
-      if (result.unitDefaulted || !result.unit && !result.confirmed?.unit) {
-        result.unit = parsed.unit; result.unitDefaulted = parsed.unitDefaulted;
-      }
-      result.sheetConfirmed = false;
-      nextExcelBlock = 0; render();
-    };
-    enabled.onchange = () => changeMode(enabled.checked, false);
-    rod.onchange = () => changeMode(rod.checked, true);
-    box.append($("label", {}, [enabled, document.createTextNode(t(" sheet_material_sheet_dimensions"))]));
-    box.append($("label", {}, [rod, document.createTextNode(t(" bar_rod_length"))]));
+    // The type owns the size fields. A style that does not print the A>V>C> type gets the same control here,
+    // so the length and width can never appear without a way to ask for them.
+    if (!YSCFormatter.excelColumns(profile.format).includes("usage")) box.append(...usageControl());
     if (!profile.format.sheet) return box;
     for (const key of ["sheetLength", "sheetWidth", "sheetThickness"]) profile.fields[key] ||= { enabled: true, source: "auto", selector: "" };
     const units = $("select", { id: "ysc-sheet-input-unit" });
@@ -739,6 +755,8 @@
     return section;
   }
   function render() {
+    // The type is derived before anything is drawn, so the panel asks for exactly the fields the type needs.
+    syncUsage();
     const opened = new Set([...(panel?.querySelectorAll("details[open]") || [])].map(el => el.id));
     if (!panel?.isConnected) {
       for (const section of panel?.querySelector("#ysc-settings")?.querySelectorAll("details") || []) opened.delete(section.id);
@@ -919,6 +937,7 @@
     YSCWorkStyles.apply(profile.format, workStyles.styles.find(s => s.id === workStyles.selected));
     nextExcelBlock = 0;
     result = YSCParser.parse(profile);
+    syncUsage();
     const quickExcel = () => {
       try {
         if (excelValidationError()) return false;

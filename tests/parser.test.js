@@ -20,8 +20,11 @@ const auto = parser.parse();
 assert.equal(auto.unit, "шт.", "Ordinary products without a site unit default to pieces");
 assert.equal(auto.unitDefaulted, true);
 assert.deepEqual(Array.from(auto.candidates.unit), [], "The default is not presented as site metadata");
-assert.equal(parser.parse({ format: { sheet: true } }).unit, "", "Sheets must not default to pieces");
-assert.equal(parser.parse({ format: { sheet: true, sheetRod: true } }).unit, "", "Rods must not default to pieces");
+// The type owns the size fields, so it is the sheet and rod type that keeps a missing unit empty.
+const typedAs = value => parser.parse({ fields: { usage: { enabled: true, source: "manual", value } } });
+assert.equal(typedAs("Sheet").unit, "", "Sheets must not default to pieces");
+assert.equal(typedAs("Rod").unit, "", "Rods must not default to pieces");
+assert.equal(parser.parse({ format: { sheet: true } }).unit, "шт.", "A stored sheet flag no longer stands in for the type");
 assert.equal(parser.parse({ fields: { unit: { enabled: false, source: "manual", value: "м" } } }).unit, "");
 assert.equal(parser.parse({ fields: { unit: { enabled: true, source: "manual", value: "комплект" } } }).unit, "комплект");
 assert.deepEqual(Array.from(auto.candidates.article), ["00022707", "6200 128 BN-KR1"]);

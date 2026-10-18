@@ -270,7 +270,8 @@ const copied = [];
   }
   const returnToRussian = root.querySelector("#ysc-language"); returnToRussian.value = "ru"; await returnToRussian.onchange();
   root.querySelector("#ysc-panel").remove();
-  profile.format.sheet = true;
+  // A sheet unit is enough now: the type follows the unit of measure and turns the size fields on.
+  profile.fields.usage = { enabled: true, source: "auto", value: "" };
   for (const key of ["sheetLength", "sheetWidth"]) profile.fields[key] = { enabled: true, source: "auto" };
   Object.assign(product, { unit: "лист", sheetLength: "2800", sheetWidth: "2070" });
   stored.ysc_excel_mode = true;
@@ -314,6 +315,8 @@ const copied = [];
   assert.equal(copied.length, 4, "CAD panel copy must not require sheet confirmation either");
   assert.equal(copied[3], "VIYAR 190218 Гвинт цинк");
   console.log("CAD sheet mode ignores dimensions, price and unit for shortcut and panel copying");
+  // The compact thickness row exists for a sheet position only, so the type is chosen before it is inspected.
+  profile.fields.usage = { enabled: true, source: "manual", value: "Sheet" };
   listener({ type: "YSC_CONFIGURE" }); await settle();
   panel = root.querySelector("#ysc-panel");
   const thickness = panel.querySelector("#ysc-value-sheetThickness");
@@ -348,7 +351,8 @@ const copied = [];
   panel.remove();
   stored.ysc_excel_mode = true;
   delete stored.ysc_work_styles;
-  profile.format.sheet = false;
+  // Piece rows: an empty type rule lets the unit of measure decide again.
+  profile.fields.usage = { enabled: true, source: "auto", value: "" };
   Object.assign(product, { price: "1.02", unit: "шт" });
   product.candidates.price = ["1.02", "10.20"];
   product.candidates.unit = ["шт", "лист"];
@@ -373,12 +377,12 @@ const copied = [];
     root.querySelector("#ysc-panel").remove();
   }
   Object.assign(product, { unit: "лист", price: "1.02", sheetLength: "2800", sheetWidth: "2070" });
-  profile.format.sheet = true;
   listener({ type: "YSC_CONFIGURE" }); await settle();
   await root.querySelector("#ysc-copy").onclick();
   assert.equal(copied.length, beforeCopy + 2, "Sheet confirmation remains mandatory despite accepting price/unit alternatives");
   console.log("Shown Excel values accepted; alternatives optional; invalid data and sheet confirmation still enforced");
-  profile.format.sheet = false;
+  // Back to plain piece rows for the layout checks: the type follows the unit, not a leftover flag.
+  Object.assign(product, { unit: "шт", sheetLength: "", sheetWidth: "" });
   stored.ysc_language = "uk";
   for (const [layout, hint] of [
     [{ name: 2, unit: 5, price: 6 }, "Сесій копіювання: 2 — B → E:F."],
@@ -507,9 +511,9 @@ const copied = [];
   profile.format = { excel: true };
   product.sheetLength = "5950.00мм"; product.sheetWidth = ""; product.unit = "пог.м";
   root.querySelector("#ysc-panel").remove(); listener({ type: "YSC_CONFIGURE" }); await settle();
-  let rodToggle = root.querySelector("#ysc-rod-enabled"); rodToggle.checked = true; rodToggle.onchange();
+  // The type is the only switch left: a running-metre unit selects a rod position by itself.
   panel = root.querySelector("#ysc-panel");
-  assert.equal(panel.querySelector("#ysc-sheet-enabled").checked, false);
+  assert.equal(panel.querySelector("#ysc-value-usage").value, "auto", "The type follows the unit without a separate switch");
   assert.equal(panel.querySelector("#ysc-value-sheetWidth"), null);
   assert.equal(panel.querySelector("#ysc-value-sheetThickness"), null);
   assert.equal(panel.querySelector("#ysc-value-sheetLength").value, "5950.00мм");
@@ -519,13 +523,14 @@ const copied = [];
   panel.querySelector("#ysc-sheet-confirm").onclick();
   await panel.querySelector("#ysc-copy").onclick();
   assert.equal(copied.at(-1), "пог.м (5,95)", "Rod unit exports length without width");
-  profile.format = { sheet: true, sheetRod: true };
+  // The remembered choice survives a reload, and a sheet position brings the width back.
+  profile.fields.usage = { enabled: true, source: "manual", value: "Rod" };
   listener({ type: "YSC_CONFIGURE" }); await settle();
-  assert.equal(root.querySelector("#ysc-rod-enabled").checked, true, "Saved profile restores rod mode");
-  const sheetToggle = root.querySelector("#ysc-sheet-enabled"); sheetToggle.checked = true; sheetToggle.onchange();
-  assert.equal(root.querySelector("#ysc-rod-enabled").checked, false);
-  assert.ok(root.querySelector("#ysc-value-sheetWidth"), "Switching back to sheet restores width");
-  console.log("Rod mode: length-only confirmation/export, restored profile and mutually exclusive sheet mode passed");
+  assert.equal(root.querySelector("#ysc-value-usage").value, "Rod", "The saved profile restores the remembered type");
+  const sheetChoice = root.querySelector("#ysc-value-usage"); sheetChoice.value = "Sheet"; sheetChoice.onchange();
+  assert.equal(root.querySelector("#ysc-value-usage").value, "Sheet");
+  assert.ok(root.querySelector("#ysc-value-sheetWidth"), "Switching to a sheet position restores width");
+  console.log("Rod type: length-only confirmation/export, restored choice and sheet width passed");
   // Styles remain global while supplier extraction/dimensions remain in site profiles.
   panel = root.querySelector("#ysc-panel");
   assert.ok(panel.querySelector("#ysc-quick-copy"));
@@ -626,11 +631,13 @@ const copied = [];
   const paletteStyles = structuredClone(stored.ysc_work_styles), paletteSelected = stored.ysc_work_style;
   const paletteStyle = stored.ysc_work_styles.find(s => s.id === "avc-import-14");
   assert.ok(paletteStyle, "The palette style is offered next to the existing ones");
-  paletteStyle.format.sheet = true; paletteStyle.format.sheetInputUnit = "mm";
+  paletteStyle.format.sheetInputUnit = "mm";
+  // The type is detected from the unit of measure until the palette asks for something else.
+  profile.fields.usage = { enabled: true, source: "auto", value: "" };
   stored.ysc_work_style = "avc-import-14";
   panel.remove(); listener({ type: "YSC_CONFIGURE" }); await settle();
   panel = root.querySelector("#ysc-panel");
-  const paletteBox = panel.querySelector("#ysc-avc");
+  let paletteBox = panel.querySelector("#ysc-avc");
   assert.ok(paletteBox, "The palette style reveals its property fields");
   const usageChoice = paletteBox.querySelector("#ysc-value-usage");
   assert.equal(usageChoice.tagName, "SELECT");
@@ -639,12 +646,19 @@ const copied = [];
   assert.equal(usageOptions[0].value, "auto", "The automatic choice comes first");
   assert.match(usageOptions[0].textContent, /^\S.*\([A-Za-z]+\)$/, "The automatic choice names the detected type");
   assert.equal(usageChoice.value, "auto", "The type is detected automatically until the user says otherwise");
+  assert.deepEqual(usageOptions.map(option => option.value), ["auto", "Volume", "Sheet", "Rod", "Cover", "Banding", "Item", "-"], "The type list keeps the receiver enum in its own order");
+  assert.equal(usageOptions[1].textContent, "Volume — Масив", "Every type is named in the interface language");
+  assert.equal(usageOptions[2].textContent, "Sheet — Листовий матеріал");
+  assert.equal(paletteBox.querySelector("#ysc-sheet-enabled"), null, "The sheet checkbox is gone: the type owns the size fields");
+  assert.equal(paletteBox.querySelector("#ysc-rod-enabled"), null, "The bar rod checkbox is gone with it");
   const usageNote = paletteBox.querySelector(".ysc-usage-note");
   assert.ok(usageNote, "The palette shows which unit the automatic type came from");
   assert.match(usageNote.textContent, /→\s*[A-Za-z]+$/, "The status line ends with the type it produced");
   assert.ok(!usageNote.hidden, "The status line stays visible in every help mode");
   for (const key of ["kind", "info", "weight", "package"]) assert.ok(paletteBox.querySelector(`#ysc-value-${key}`), `${key} is editable in the panel`);
   usageChoice.value = "Sheet"; usageChoice.onchange();
+  // Changing the type rebuilds the panel, so the palette fields are read from the fresh one.
+  panel = root.querySelector("#ysc-panel"); paletteBox = panel.querySelector("#ysc-avc");
   for (const [key, value] of [["article", "29699"], ["price", "657"], ["kind", "ДСП"], ["info", "Плита, шліфована"], ["weight", "11,2"], ["package", "1"]]) {
     const field = panel.querySelector(`#ysc-value-${key}`); field.value = value; field.listeners.input();
   }
@@ -667,7 +681,7 @@ const copied = [];
   assert.equal(paletteRow[10], "11.2", "Palette numbers use a period");
   console.log("A>V>C> palette style: panel fields, remembered value, live preview, no dimension confirmation and a 14 value row passed");
   stored.ysc_work_styles = paletteStyles; stored.ysc_work_style = paletteSelected;
-  profile.format.sheet = false;
+  profile.fields.usage = { enabled: true, source: "auto", value: "" };
   Object.assign(stored.ysc_work_styles.find(s => s.id === stored.ysc_work_style).format, { excel: true, excelColumns: ["name", "price"], sheet: false, excelSeparator: "tab" });
   product.price = ""; product.candidates.price = [];
   panel.remove(); listener({ type: "YSC_CONFIGURE" }); await settle();
@@ -701,9 +715,10 @@ const copied = [];
   assert.ok(copied.at(-1).endsWith("\tшт."), "The default unit is exported");
   listener({ type: "YSC_CONFIGURE" }); await settle(); panel = root.querySelector("#ysc-panel");
   const manualUnit = panel.querySelector("#ysc-value-unit"); manualUnit.value = "комплект"; manualUnit.listeners.input();
-  const unitSheetToggle = panel.querySelector("#ysc-sheet-enabled"); unitSheetToggle.checked = true; unitSheetToggle.onchange();
-  assert.equal(root.querySelector("#ysc-value-unit").value, "комплект", "Mode switching preserves the user's unit");
-  const piecesToggle = root.querySelector("#ysc-sheet-enabled"); piecesToggle.checked = false; piecesToggle.onchange();
+  // The type is the only switch left, so it is what a former checkbox click has become.
+  const unitSheetType = panel.querySelector("#ysc-value-usage"); unitSheetType.value = "Sheet"; unitSheetType.onchange();
+  assert.equal(root.querySelector("#ysc-value-unit").value, "комплект", "A type change preserves the user's unit");
+  const piecesType = root.querySelector("#ysc-value-usage"); piecesType.value = "auto"; piecesType.onchange();
   await root.querySelector("#ysc-copy").onclick();
   assert.ok(copied.at(-1).endsWith("\tкомплект"), "The manual unit overrides the pieces default");
   console.log("Pieces default and manual unit export passed");

@@ -37,17 +37,23 @@ assert.equal(f.formatExcel(fields, { sheet: true }), "VIYAR 33943 ДСП - 18\t�
 assert.equal(f.format(fields), "VIYAR 33943 ДСП");
 assert.equal(f.format(fields, { sheet: true, name: false }), "VIYAR 33943");
 rows = [node("Довжина, мм 2800"), node("Ширина, мм 2070"), node("Товщина, мм 18"), node("Висота, мм 900")];
-let parsed = p.parse({ format: { sheet: true } });
+// The type owns the size fields, so every sheet case asks for a sheet position instead of toggling a flag.
+const typed = (value, extra = {}) => p.parse({ ...extra, fields: { ...extra.fields, usage: { enabled: true, source: "manual", value } } });
+let parsed = typed("Sheet");
 assert.equal(parsed.sheetLength, "2800 мм"); assert.equal(parsed.sheetWidth, "2070 мм");
 assert.equal(parsed.sheetThickness, "18");
 assert.equal(f.sheetSize(parsed), "(2,8*2,07)");
-parsed = p.parse({ format: { sheet: true }, fields: { sheetWidth: { enabled: true, source: "css", selector: ".width" } } });
+parsed = typed("Sheet", { fields: { sheetWidth: { enabled: true, source: "css", selector: ".width" } } });
 assert.equal(parsed.sheetWidth, "2070");
-parsed = p.parse({ format: { sheet: true }, fields: { sheetThickness: { enabled: true, source: "css", selector: ".thickness-select" } } });
+parsed = typed("Sheet", { fields: { sheetThickness: { enabled: true, source: "css", selector: ".thickness-select" } } });
 assert.equal(parsed.sheetThickness, "18", "Select picker reads only selected option, not all thicknesses");
+parsed = typed("Rod");
+assert.equal(parsed.sheetLength, "2800 мм"); assert.equal(parsed.sheetWidth, "", "A rod position has no width");
+assert.equal(p.parse({ fields: { usage: { enabled: true, source: "manual", value: "Item" } } }).sheetLength, "", "An item position takes no size from the page");
+assert.equal(p.parse({ format: { sheet: true } }).sheetLength, "", "A stored sheet flag no longer stands in for the type");
 rows = [];
 metadata.additionalProperty = [{ name: "Довжина, мм", value: 2800 }, { name: "Ширина", value: 2.07, unitText: "m" }, { name: "Товщина", value: 0.018, unitText: "m" }];
-parsed = p.parse({ format: { sheet: true } });
+parsed = typed("Sheet");
 assert.equal(f.sheetSize(parsed), "(2,8*2,07)");
 assert.equal(parsed.sheetThickness, "18");
 assert.equal(p.parse().sheetLength, "");
