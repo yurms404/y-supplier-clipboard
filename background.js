@@ -1,11 +1,5 @@
-importScripts("storage/local-images.js");
+importScripts("storage/local-images.js", "core/clipboard.js");
 
-async function ensureOffscreen() {
-  const contexts = await chrome.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"] });
-  if (!contexts.length) await chrome.offscreen.createDocument({
-    url: "offscreen.html", reasons: ["CLIPBOARD"], justification: "Copy the extracted product text after a user command."
-  });
-}
 
 const UPDATE_ENDPOINT = "https://api.github.com/repos/yurms404/y-supplier-clipboard/releases/latest";
 const UPDATE_CHECK_INTERVAL = 12 * 60 * 60 * 1000;
@@ -132,8 +126,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     return true;
   }
   if (message.type !== "YSC_COPY") return;
-  ensureOffscreen()
-    .then(() => chrome.runtime.sendMessage({ type: "YSC_OFFSCREEN_COPY", text: String(message.text || "") }))
+  YSCClipboard.copy(message.text)
     .then(result => reply(result?.ok ? result : { ok: false, error: result?.error || "Offscreen-документ не підтвердив копіювання." }))
     .catch(error => reply({ ok: false, error: error.message }));
   return true;
