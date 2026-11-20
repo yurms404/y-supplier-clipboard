@@ -750,4 +750,37 @@ const copied = [];
   const roundTrip = context.YSCWorkStyles.importStyle(context.YSCWorkStyles.exportStyle(currencyStyle));
   assert.equal(roundTrip.format.excelColumns[1], "currency", "Currency columns survive style export/import");
   console.log("Currency display, manual override, optional export and style transfer passed");
+
+  root.querySelector("#ysc-panel")?.remove();
+  listener({ type: "YSC_CONFIGURE" }); await settle();
+  const fieldPanel = root.querySelector("#ysc-panel");
+  const profileBeforeCopy = JSON.stringify(profile);
+  for (const [key, value] of [["article", "00125-A"], ["name", "Кріплення 20×20 — ручна назва"], ["price", "1 004,46"], ["name", ""]]) {
+    const field = fieldPanel.querySelector(`#ysc-value-${key}`);
+    const copy = fieldPanel.querySelector(`#ysc-copy-field-${key}`);
+    const pick = fieldPanel.querySelector(`#ysc-pick-${key}`);
+    assert.ok(copy); assert.equal(copy.type, "button");
+    assert.equal(copy.parent, field.parent);
+    assert.ok(copy.parent.children.indexOf(copy) > copy.parent.children.indexOf(pick));
+    assert.equal(copy.ariaLabel, copy.title); assert.ok(copy.title.length > 5);
+    assert.equal(copy.querySelector(".ysc-copy-icon")["aria-hidden"], "true");
+    field.value = value;
+    const picksBefore = picked.length, copiesBefore = copied.length;
+    await copy.onclick();
+    assert.equal(copied.length, copiesBefore + 1);
+    assert.equal(copied.at(-1), value, "Copy the live input verbatim without row formatting");
+    assert.equal(field.value, value); assert.equal(picked.length, picksBefore);
+  }
+  assert.equal(JSON.stringify(profile), profileBeforeCopy, "Copying a field does not change the profile");
+  assert.equal(fieldPanel.querySelectorAll(".ysc-field-copy").length, 3);
+  assert.ok(fieldPanel.querySelector("#ysc-quick-copy").querySelector(".ysc-copy-icon"));
+  const originalFieldSend = context.chrome.runtime.sendMessage;
+  try {
+    context.chrome.runtime.sendMessage = async () => ({ ok: false, error: "Clipboard unavailable" });
+    await fieldPanel.querySelector("#ysc-copy-field-article").onclick();
+    context.chrome.runtime.sendMessage = async () => { throw new Error("Worker unavailable"); };
+    await fieldPanel.querySelector("#ysc-copy-field-article").onclick();
+  } finally { context.chrome.runtime.sendMessage = originalFieldSend; }
+  console.log("Field copy: live article/name/price, exact text, empty values, button order, accessibility, failures and unchanged profile passed");
+
 })().catch(error => { console.error(error); process.exitCode = 1; });

@@ -143,6 +143,19 @@
   }
   function toast(message, error = false) { const n = $("div", { textContent: message, className: error ? "ysc-error" : "" }); Object.assign(n.style, { position:"fixed", zIndex:2147483647, bottom:"20px", right:"20px", background:"#172033", color:"white", padding:"10px 14px", borderRadius:"7px", maxWidth:"min(600px, calc(100vw - 40px))", overflowWrap:"anywhere", whiteSpace:"pre-wrap" }); document.documentElement.append(n); setTimeout(() => n.remove(), 8000); }
   function input(label, value, change, type = "text", event = "input") { const l = $("label", { textContent: t(label) }), i = $("input", { type, value: value || "" }); i.addEventListener(event, () => change(i.value, i)); return [l, i]; }
+  function copyIcon() {
+    const icon = $("span", { className: "ysc-copy-icon" });
+    icon.setAttribute("aria-hidden", "true");
+    return icon;
+  }
+  async function copyField(field) {
+    try {
+      const value = String(field.value || "");
+      const reply = await chrome.runtime.sendMessage({ type: "YSC_COPY", text: value });
+      if (!reply?.ok) throw new Error(reply?.error || "error");
+      toast(t("copied_to_clipboard", { target: "", value }));
+    } catch (error) { toast(t("copy_failed", { error: t(error.message) }), true); }
+  }
   function inlinePicker(field, key, title, pick = () => pickField(key)) {
     const wrapper = $("div", { className: "ysc-field-picker" });
     const cursor = $("span", { className: "ysc-cursor-icon" });
@@ -150,6 +163,15 @@
     const button = $("button", { id: `ysc-pick-${key}`, type: "button", className: "ysc-pick-icon", title: t(title), ariaLabel: t(title) }, [cursor]);
     button.onclick = pick;
     field.after(wrapper); wrapper.append(field, button);
+    if (["article", "name", "price"].includes(key)) {
+      const label = t({ article: "article_sku", name: "product_name", price: "price" }[key]);
+      const title = `${t("copy_2")}: ${label}`;
+      const copy = $("button", { id: `ysc-copy-field-${key}`, type: "button", className: "ysc-field-copy", title, ariaLabel: title }, [copyIcon()]);
+      copy.onclick = () => copyField(field);
+      wrapper.setAttribute("data-field-copy", "true");
+      wrapper.append(copy);
+    }
+
     return wrapper;
   }
   function folded(key, title, children) {
@@ -770,7 +792,7 @@
       $("img", { src: chrome.runtime.getURL("icons/icon-32.png"), alt: "", width: 24, height: 24 }),
       $("span", { textContent: "Y Supplier Clipboard" })
     ]);
-    const quickCopy = $("button", { id: "ysc-quick-copy", textContent: "⧉", title: t("copy_result"), ariaLabel: t("copy_result") });
+    const quickCopy = $("button", { id: "ysc-quick-copy", type: "button", title: t("copy_result"), ariaLabel: t("copy_result") }, [copyIcon()]);
     quickCopy.onclick = copyQuick;
     panel.append(heading, $("div", { className: "ysc-quick-result" }, [$("div", { id: "ysc-quick-preview", textContent: quickText() }), quickCopy]));
     const imageStage = $("div", { className: "ysc-product-image-stage" });
